@@ -7,7 +7,8 @@
     "build": "next build --webpack",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test:workflow": "node scripts/verify-workflow.mjs"
+    "test:workflow": "node scripts/verify-workflow.mjs",
+    "test:auth": "node scripts/verify-auth.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.3.15",

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { workspaceCookie } from "../../../../../lib/workspace-cookie";
+import { requestAccess } from "../../../../../lib/workspace-cookie";
 import { getReportRecord } from "../../../../../lib/store";
 import { makeReportPdf } from "../../../../../lib/report-pdf";
 import { reportTitle } from "../../../../../lib/report";
@@ -7,7 +7,7 @@ import { reportTitle } from "../../../../../lib/report";
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const workspace = workspaceCookie(request);
+  const workspace = (await requestAccess(request))?.id;
   const { id } = await context.params;
   if (!workspace || id.length > 120) return new NextResponse(null, { status: 404 });
   const item = await getReportRecord(workspace, id);

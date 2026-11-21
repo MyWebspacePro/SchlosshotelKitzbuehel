@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import {
   Activity, ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, BarChart3, CalendarDays,
   Check, ChevronDown, CircleAlert, ClipboardList, Download, Euro, Globe, Image as ImageIcon,
-  LayoutGrid, LineChart, Link2, Megaphone, Menu, MessageSquare, MousePointer2,
+  LayoutGrid, LineChart, Link2, LogIn, LogOut, Megaphone, Menu, MessageSquare, MousePointer2,
   Plus, RefreshCw, Search, Settings, Sparkles, Star, X
 } from "lucide-react";
 import ContentStudio, { contentFormat, type ContentFormat } from "./content-studio";
@@ -15,10 +15,11 @@ import OfferEditor from "./offer-editor";
 import ReportView from "./report-view";
 import { ReportCatalog, ReportCreation } from "./report-creation";
 import { reportTitle, type ReportKind } from "../lib/report";
+import { sendAuth, SignIn } from "./team-access";
 import MetricImport from "./metric-import";
 import type { Dataset } from "../lib/import-fields";
 import { websitePages } from "../lib/website";
-import { agencyChannels, availabilityLabel, campaignRowsFor, channelLabel, euro, number, offerComparison, pct, priceEuro, sum, type ChannelOption, type Connection, type Kind, type MediaImage, type Metric, type OwnerOption, type RecordItem, type Workspace } from "../lib/model";
+import { agencyChannels, availabilityLabel, campaignRowsFor, channelLabel, euro, number, offerComparison, pct, priceEuro, sum, type ChannelOption, type Connection, type Kind, type MediaImage, type Metric, type OwnerOption, type RecordItem, type WorkspaceResponse } from "../lib/model";
 
 const nav = [
   { id: "home", label: "Übersicht", icon: LayoutGrid },
@@ -33,7 +34,7 @@ const nav = [
   { id: "settings", label: "Einstellungen", icon: Settings }
 ] as const;
 type Page = typeof nav[number]["id"];
-type Modal = { type: "edit"; kind: Kind; item?: RecordItem } | { type: "import"; campaign?: string; dataset?: Dataset } | { type: "search" } | { type: "report"; kind?: ReportKind };
+type Modal = { type: "edit"; kind: Kind; item?: RecordItem } | { type: "import"; campaign?: string; dataset?: Dataset } | { type: "search" | "login" } | { type: "report"; kind?: ReportKind };
 const deleteLabels: Partial<Record<Kind, [string, string]>> = {
   campaign: ["Kampagne", "Die zugehörigen Kampagnenmesswerte werden entfernt. Verknüpfte Beiträge und Aufgaben bleiben erhalten."],
   offer: ["Angebot", "Kampagnen, Beiträge und Prüfeinträge bleiben erhalten. Ihre Verknüpfung mit diesem Angebot wird gelöst."],
@@ -104,8 +105,9 @@ function Trend({ rows }: { rows: Metric[] }) {
 }
 
 export default function Cockpit() {
-  const [data, setData] = useState<Workspace>();
+  const [data, setData] = useState<WorkspaceResponse>();
   const [page, setPage] = useState<Page>("home");
+  const [locked, setLocked] = useState(false);
   const [period, setPeriod] = useState(30);
   const [modal, setModal] = useState<Modal>();
   const [pendingDelete, setPendingDelete] = useState<RecordItem>();
@@ -119,12 +121,17 @@ export default function Cockpit() {
   const [siteUrl, setSiteUrl] = useState<string>(websitePages[0][1]);
   const [statusFilter, setStatusFilter] = useState("Alle");
 
+  const refreshWorkspace = useCallback(async (signal?: AbortSignal) => {
+    const response = await fetch("/api/workspace", { signal, cache: "no-store" });
+    if (response.status === 401) { setData(undefined); setLocked(true); return; }
+    if (!response.ok) throw new Error("Der Arbeitsbereich konnte nicht geladen werden.");
+    setData(await response.json());
+    setLocked(false);
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/workspace", { signal: controller.signal }).then(async (r) => {
-      if (!r.ok) throw new Error("Der Arbeitsbereich konnte nicht geladen werden.");
-      setData(await r.json());
-    }).catch((e: Error) => { if (e.name !== "AbortError") setProblem(e.message); });
+    refreshWorkspace(controller.signal).catch((e: Error) => { if (e.name !== "AbortError") setProblem(e.message); });
     const update = () => {
       const hash = location.hash.slice(1);
       const target = nav.find((item) => item.id === hash);
@@ -133,7 +140,7 @@ export default function Cockpit() {
     update();
     window.addEventListener("hashchange", update);
     return () => { controller.abort(); window.removeEventListener("hashchange", update); };
-  }, []);
+  }, [refreshWorkspace]);
 
   function move(next: Page) {
     setPage(next); setMenu(false); setStatusFilter("Alle"); setSelected(""); setDraftFormat(undefined);
@@ -141,7 +148,7 @@ export default function Cockpit() {
     window.scrollTo({ top: 0, behavior: "instant" });
   }
   function open(next: Modal) {
-    if (!data) return;
+    if (!data && next.type !== "login") return;
     setModal(next); setProblem(""); setQuery("");
   }
   function closeModal() { setModal(undefined); setProblem(""); }
@@ -157,12 +164,13 @@ export default function Cockpit() {
     setBusy(true); setProblem(""); setMessage("");
     try {
       const r = await fetch("/api/workspace", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      if (r.status === 401) { setData(undefined); setLocked(true); return false; }
       const result = await r.json();
       if (!r.ok) throw new Error(result.error || "Die Aktion ist fehlgeschlagen.");
       setData(result);
       if (close) setModal(undefined);
       setMessage(success);
-      return result as Workspace;
+      return result as WorkspaceResponse;
     } catch (e) { setProblem(e instanceof Error ? e.message : "Die Aktion ist fehlgeschlagen."); return false; }
     finally { setBusy(false); }
   }
@@ -195,6 +203,12 @@ export default function Cockpit() {
   const editorLabel = offerBeingEdited ? "Angebot" : modal?.type === "edit" && modal.kind === "agency" ? "Agentur" : "Eintrag";
   const deleteLabel = pendingDelete ? deleteLabels[pendingDelete.kind] : undefined;
   const area = nav.find((n) => n.id === page)!;
+  const identity = data?.identity;
+
+  if (locked) return <main className="auth-screen"><section className="card auth-card">
+    <img src="/brand/logo.svg" alt="Schlosshotel Kitzbühel" /><h1>Team-Arbeitsbereich</h1>
+    <SignIn locked />
+  </section></main>;
 
   return <div className="shell">
     {menu && <button className="scrim" aria-label="Menü schließen" onClick={() => setMenu(false)} />}
@@ -212,7 +226,15 @@ export default function Cockpit() {
     <div className="workspace">
       <header className="topbar">
         <div className="breadcrumb"><button className="icon-button menu-toggle" aria-label="Menü öffnen" onClick={() => setMenu(true)}><Menu size={21} /></button><span className="crumb-root">Arbeitsbereich</span><span className="slash">/</span><strong>{area.label}</strong></div>
-        <div className="header-actions"><button className="icon-button" aria-label="Suchen" onClick={() => open({ type: "search" })}><Search size={19} /></button><span className="demo-chip"><i /> Beispieldaten</span></div>
+        <div className="header-actions"><button className="icon-button" aria-label="Suchen" onClick={() => open({ type: "search" })}><Search size={19} /></button>
+          <span className="demo-chip"><i /> Beispieldaten</span>
+          {identity && identity.role !== "guest" ? <><span className="identity-name" title={identity.username}>{identity.name}</span>
+            <button className="button auth-action" aria-label="Abmelden" onClick={async () => {
+              try { await sendAuth({ action: "logout" }); location.reload(); }
+              catch (error) { setProblem(error instanceof Error ? error.message : "Abmelden fehlgeschlagen."); }
+            }}><LogOut size={16} /><span>Abmelden</span></button></> :
+            <button className="button auth-action" aria-label="Team anmelden" onClick={() => open({ type: "login" })}><LogIn size={16} /><span>Team anmelden</span></button>}
+        </div>
       </header>
       <main>
         {!modal && !pendingDelete && problem && <div className="notice error" role="alert">{problem}<button aria-label="Schließen" onClick={() => setProblem("")}><X size={16} /></button></div>}
@@ -240,8 +262,8 @@ export default function Cockpit() {
           <section className="card table-card"><div className="card-heading"><div><h3>Kanäle im Vergleich</h3><p>Direktvertrieb im ausgewählten Zeitraum</p></div><button className="text-button" onClick={() => move("campaign")}>Kampagnen <ArrowRight size={16} /></button></div><ChannelTable metrics={visible} channelOptions={channelOptions} /></section>
         </> : <>
           <div className="page-heading"><div><h1>{headings[page][0]}</h1><p>{headings[page][1]}</p></div><div className="page-actions">
-            {page === "settings" ? null
-            : page === "review" ? <><button className="button" onClick={() => open({ type: "import", dataset: "reviews" })}><Download size={16} /> Bewertungen importieren</button>
+            {page === "settings" ? <button className="button" onClick={() => document.getElementById("feature-status")?.scrollIntoView({ behavior: "smooth" })}><Activity size={16} /> Funktionsstatus</button>
+            : page === "review" ? <><button className="button" onClick={() => move("settings")}><Link2 size={16} /> Live-Abruf einrichten</button><button className="button" onClick={() => open({ type: "import", dataset: "reviews" })}><Download size={16} /> Bewertungen importieren</button>
               {reviewSources.map((source) => <button key={source.id} className="button primary" disabled={busy} onClick={() => action({ action: "sync", id: source.id }, source.name + " abgeglichen.")}>
                 <RefreshCw size={16} /> {source.id === "google" ? "Google" : source.name} {source.mode === "live" ? "abrufen" : "Beispiele laden"}</button>)}</>
             : page === "connections" ? <button className="button primary" onClick={() => open({ type: "import" })}><Plus size={17} /> Daten importieren</button>
@@ -251,20 +273,20 @@ export default function Cockpit() {
             : page === "agency" ? <><button className="button" onClick={() => open({ type: "import", dataset: "agency" })}>Budgets importieren</button><button className="button primary" onClick={() => open({ type: "edit", kind: "agency" })}><Plus size={17} /> Agentur anlegen</button></>
             : <button className="button primary" onClick={() => open({ type: "edit", kind: page })}><Plus size={17} /> {page === "campaign" ? "Kampagne" : "Aufgabe"} anlegen</button>}
           </div></div>
-          {page === "settings" ? (data && <WorkspaceSettings data={data} busy={busy} save={async (payload, message) => Boolean(await action(payload, message))} />)
+          {page === "settings" ? (data && <WorkspaceSettings data={data} busy={busy} refresh={refreshWorkspace} save={async (payload, message) => Boolean(await action(payload, message))} />)
           : page === "connections" ? <>
             <section className="card panel"><div className="card-heading"><div><h3>Quellenstatus</h3><p>Ergebnisse des letzten Abrufs pro Dienst.</p></div><button className="button" onClick={() => move("settings")}><Settings size={16} /> Verbindungen konfigurieren</button></div>
               <div className="connection-grid">{sources.map((c) => <div className="connection" key={c.id}><span className="focus-icon"><Link2 size={18} /></span><div><strong>{c.name}</strong><small>{c.category} · {connectionModeLabel[c.mode]}</small>{c.last_sync && <small>Stand {localTime(c.last_sync)}</small>}{c.last_result && <small>{c.last_result}</small>}</div>{(c.mode === "example" || c.mode === "live" && c.liveAvailable) && <button className="icon-button" aria-label={c.name + " synchronisieren"} title={c.mode === "live" ? "Live-Daten abrufen" : "Beispieldaten abgleichen"} disabled={busy} onClick={() => action({ action: "sync", id: c.id }, c.name + " wurde synchronisiert.")}><RefreshCw size={17} /></button>}</div>)}</div>
             </section>
             <section className="card table-card panel"><div className="card-heading"><div><h3>Zeitpläne</h3><p>Automatische Prüfungen und Leistungsübersichten</p></div><button className="icon-button" title="Zeitpläne aktualisieren" aria-label="Zeitpläne aktualisieren" onClick={async () => {
-              try { const r = await fetch("/api/workspace"); if (!r.ok) throw new Error(); setData(await r.json()); }
+              try { await refreshWorkspace(); }
               catch { setProblem("Die Zeitpläne konnten nicht geladen werden."); }
             }}><RefreshCw size={17} /></button></div>
               {(["check", "report", "campaign-automation"] as const).map((target) => {
                 const schedule = data?.schedules.find((item) => item.action === target);
                 const label = { check: "Angebotsprüfung", report: "Leistungsübersicht", "campaign-automation": "Kampagnenregeln" }[target];
                 return <div className="record-row static" key={target}><div><strong>{label}</strong><small>{schedule ? [schedule.last_status, "Nächster Lauf " + localTime(schedule.next_at)].filter(Boolean).join(" · ") : "Aus"}</small></div>
-                  <select className="schedule-select" value={schedule?.hours ?? 0} disabled={busy} aria-label={label + " Zeitplan"} onChange={(e) => action({ action: "schedule", target, hours: Number(e.target.value) }, "Zeitplan gespeichert.")}>
+                  <select className="schedule-select" value={schedule?.hours ?? 0} disabled={busy || identity?.role === "member"} aria-label={label + " Zeitplan"} onChange={(e) => action({ action: "schedule", target, hours: Number(e.target.value) }, "Zeitplan gespeichert.")}>
                     <option value={0}>Aus</option><option value={1}>Stündlich</option><option value={6}>Alle 6 Stunden</option><option value={24}>Täglich</option><option value={168}>Wöchentlich</option>
                   </select></div>;
               })}
@@ -307,8 +329,8 @@ export default function Cockpit() {
               generate={activeItem ? () => action({ action: "draft", id: activeItem.id }, "Textentwurf gespeichert.") : undefined} />}
           </div> : page === "report" ? <>
             <ReportCatalog onSelect={(kind) => open({ type: "report", kind })} />
-            {activeItem ? <ReportView item={activeItem} reports={visibleRecords} select={setSelected} busy={busy} remove={() => confirmDelete(activeItem)}
-              analyse={data?.ai ? () => action({ action: "report-analysis", id: activeItem.id }, "KI-Auswertung gespeichert.") : undefined} />
+            {activeItem ? <ReportView item={activeItem} reports={visibleRecords} select={setSelected} busy={busy} ai={data?.ai ?? false} remove={() => confirmDelete(activeItem)}
+              analyse={() => action({ action: "report-analysis", id: activeItem.id }, "KI-Auswertung gespeichert.")} />
               : <section className="card table-card"><Empty>Gespeicherte Berichte erscheinen hier.</Empty></section>}
           </> : <>
             {page === "campaign" && <section className="card table-card panel"><div className="card-heading"><div><h3>Kampagnenperformance</h3><p>Zuordnung über die importierten Kampagnendaten</p></div><button className="button" onClick={() => open({ type: "import" })}><Plus size={16} /> Daten importieren</button></div>
@@ -358,8 +380,9 @@ export default function Cockpit() {
       </main>
     </div>
     {modal && <Dialog close={closeModal} active={!pendingDelete} variant={offerBeingEdited ? "offer" : undefined}
-      title={modal.type === "edit" ? (modal.item ? editorLabel + " bearbeiten" : editorLabel === "Eintrag" ? "Neuer Eintrag" : editorLabel + " anlegen") : modal.type === "import" ? "Daten importieren" : modal.type === "search" ? "Arbeitsbereich durchsuchen" : "Bericht erstellen"}>
+      title={modal.type === "edit" ? (modal.item ? editorLabel + " bearbeiten" : editorLabel === "Eintrag" ? "Neuer Eintrag" : editorLabel + " anlegen") : modal.type === "import" ? "Daten importieren" : modal.type === "search" ? "Arbeitsbereich durchsuchen" : modal.type === "login" ? "Team anmelden" : "Bericht erstellen"}>
       {problem && <div className="notice error" role="alert">{problem}</div>}
+      {modal.type === "login" && <SignIn onCancel={closeModal} />}
       {campaignBeingEdited && <div className="inline-actions campaign-management">
         {campaignBeingEdited.data.status === "Aktiv" && <button className="button" disabled={busy} onClick={() => action({ action: "campaign-status", id: campaignBeingEdited.id, status: "Pausiert" }, "Kampagne pausiert.", true)}>Kampagne pausieren</button>}
         {campaignBeingEdited.data.status === "Pausiert" && <button className="button" disabled={busy} onClick={() => action({ action: "campaign-status", id: campaignBeingEdited.id, status: "Aktiv" }, "Kampagne wieder aktiviert.", true)}>Kampagne fortsetzen</button>}
@@ -515,8 +538,12 @@ function Editor({ kind, item, offers, sources, owners, channelOptions, busy, ai,
     {kind !== "review" && <label className="form-field">{kind === "content" ? "Beitragstext" : kind === "agency" ? "Leistungen" : "Beschreibung"}<textarea name="description" rows={4} maxLength={2400} defaultValue={d?.description} /></label>}
     {kind === "review" && <label className="form-field">Antwort<textarea name="response" rows={3} maxLength={2400} defaultValue={d?.response} /></label>}
     {(kind === "review" || kind === "content") && <p className="form-help">Prüfe vor der Freigabe Angaben, Markenstil und Datenschutz. Die Freigabe gilt in diesem Arbeitsbereich.</p>}
-    <div className="inline-actions"><button type="submit" className="button primary" disabled={busy}>Speichern</button>{draft && kind === "review" && <button type="button" className="button" onClick={draft} disabled={busy}><Sparkles size={16} /> {ai ? "Antwort mit KI entwerfen" : "Antwortvorlage anwenden"}</button>}{kind === "review" && d?.status === "Freigegeben" && d.response && <button type="button" className="button" onClick={() => download("bewertungsantwort.txt", d.response!, "text/plain;charset=utf-8")}><Download size={16} /> Antwort exportieren</button>}
+    <div className="inline-actions"><button type="submit" className="button primary" disabled={busy}>Speichern</button>{draft && kind === "review" && <>
+      <button type="button" className="button" onClick={draft} disabled={busy || !ai} title={!ai ? "OpenAI-Zugang fehlt" : undefined}><Sparkles size={16} /> Antwort mit KI entwerfen</button>
+      {!ai && <button type="button" className="button" onClick={draft} disabled={busy}>Antwortvorlage anwenden</button>}
+    </>}{kind === "review" && d?.status === "Freigegeben" && d.response && <button type="button" className="button" onClick={() => download("bewertungsantwort.txt", d.response!, "text/plain;charset=utf-8")}><Download size={16} /> Antwort exportieren</button>}
     {kind === "guide" && d?.description && <button type="button" className="button" onClick={() => download("arbeitsanleitung.txt", d.title + "\n\n" + d.description, "text/plain;charset=utf-8")}><Download size={16} /> Anleitung exportieren</button>}
     {remove && <button type="button" className="button danger-text" onClick={remove} disabled={busy}>{deleteLabels[kind]?.[0]} löschen</button>}</div>
+    {kind === "review" && !ai && <p className="form-help">OpenAI-Zugang für KI-Entwürfe fehlt.</p>}
   </form>;
 }

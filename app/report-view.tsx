@@ -2,8 +2,8 @@ import { Download, Printer, Sparkles } from "lucide-react";
 import type { RecordItem } from "../lib/model";
 import { reportDate, reportPeriod, reportPresentation, reportSnapshot, reportTitle, type ReportTable } from "../lib/report";
 
-export default function ReportView({ item, reports, select, analyse, busy, remove }: {
-  item: RecordItem; reports: RecordItem[]; select: (id: string) => void; analyse?: () => void; busy: boolean; remove: () => void;
+export default function ReportView({ item, reports, select, analyse, busy, ai, remove }: {
+  item: RecordItem; reports: RecordItem[]; select: (id: string) => void; analyse: () => void; busy: boolean; ai: boolean; remove: () => void;
 }) {
   const snapshot = reportSnapshot(item.data);
   const view = reportPresentation(snapshot);
@@ -17,7 +17,7 @@ export default function ReportView({ item, reports, select, analyse, busy, remov
       </select></label>
       <div className="inline-actions">
         <button className="button danger-text" disabled={busy} onClick={remove}>Bericht löschen</button>
-        {analyse && <button className="button" disabled={busy} onClick={analyse}><Sparkles size={16} /> KI-Auswertung</button>}
+        <button className="button" disabled={busy || !ai} title={!ai ? "OpenAI-Zugang fehlt" : undefined} onClick={analyse}><Sparkles size={16} /> {ai ? "KI-Auswertung" : "KI-Auswertung · Zugang fehlt"}</button>
         <a className="button" href={pdf} target="_blank" rel="noreferrer"><Printer size={16} /> Druckansicht</a>
         <a className="button primary" href={pdf + "?download=1"}><Download size={16} /> PDF herunterladen</a>
       </div>

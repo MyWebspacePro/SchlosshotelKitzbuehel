@@ -34,7 +34,7 @@ export default function ChannelSettings({ options, busy, onSave }: {
           </form> : <>
             <span><strong>{option.label}</strong><small>{option.active ? "Aktiv" : "Ausgeblendet"}</small></span>
             <div className="inline-actions">
-              <button className="button" onClick={() => setEditing(option.code)}>Umbenennen</button>
+              <button className="button" disabled={busy} onClick={() => setEditing(option.code)}>Umbenennen</button>
               <button className="button" disabled={busy} onClick={() => onSave({ code: option.code, active: !option.active })}>{option.active ? "Ausblenden" : "Einblenden"}</button>
             </div>
           </>}

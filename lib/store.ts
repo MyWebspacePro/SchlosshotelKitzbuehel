@@ -40,6 +40,16 @@ const schema = `
     SELECT hotel_workspace.id, member.id, member.name, lower(member.name), member.role FROM hotel_workspace
       CROSS JOIN (VALUES ('team-marketing','Anna Berger','Digital Marketing'),('team-content','Lena Steiner','Content & Redaktion'),('team-tech','Martin Hofer','Website & Technik')) AS member(id,name,role)
     ON CONFLICT DO NOTHING;
+  CREATE TABLE IF NOT EXISTS hotel_account (
+    workspace uuid NOT NULL, owner text NOT NULL, username text NOT NULL UNIQUE, password_hash text NOT NULL, admin boolean NOT NULL DEFAULT false,
+    PRIMARY KEY (workspace,owner), FOREIGN KEY (workspace,owner) REFERENCES hotel_owner (workspace,id) ON DELETE CASCADE
+  );
+  CREATE TABLE IF NOT EXISTS hotel_session (
+    token_hash text PRIMARY KEY, workspace uuid NOT NULL, owner text NOT NULL, expires_at timestamptz NOT NULL,
+    FOREIGN KEY (workspace,owner) REFERENCES hotel_account (workspace,owner) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS hotel_session_account ON hotel_session (workspace,owner);
+  CREATE TABLE IF NOT EXISTS hotel_auth_limit (bucket text PRIMARY KEY, expires_at timestamptz NOT NULL, attempts int NOT NULL);
   CREATE TABLE IF NOT EXISTS hotel_schedule (
     workspace uuid NOT NULL, action text NOT NULL, hours int NOT NULL,
     next_at timestamptz NOT NULL, last_status text,
@@ -92,7 +102,7 @@ async function open(): Promise<Database> {
     transaction: (work) => local.transaction((tx) => work((sql, args) => tx.query(sql, args)))
   };
 }
-function database(): Promise<Database> {
+export function database(): Promise<Database> {
   // Next.js keeps the connection alive across development reloads. Apply any new
   // schema before the updated code uses it, without reopening the PGlite files.
   const schemas = cached.hotelSchemas ??= new Map<string, Promise<Database>>();
@@ -113,7 +123,7 @@ function database(): Promise<Database> {
   return migration;
 }
 
-function workspaceTransaction<T>(db: Database, workspace: string, work: (query: Query) => Promise<T>) {
+export function workspaceTransaction<T>(db: Database, workspace: string, work: (query: Query) => Promise<T>) {
   return db.transaction(async (query) => {
     await query("SELECT id FROM hotel_workspace WHERE id=$1 FOR UPDATE", [workspace]);
     return work(query);
@@ -504,6 +514,11 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
     if (state.owners.some((person) => person.id !== owner?.id && person.name.toLowerCase() === name.toLowerCase())) throw new InputError("Diese Person ist bereits eingetragen.");
     if (body.active !== undefined && typeof body.active !== "boolean") throw new InputError("Der Personenstatus ist ungültig.");
     if (owner) {
+      if (body.active === false) {
+        const admin = await query("SELECT 1 FROM hotel_account WHERE workspace=$1 AND owner=$2 AND admin", [id, owner.id]);
+        if (admin.rows.length) throw new InputError("Das Administratorkonto kann hier nicht deaktiviert werden.");
+        await query("DELETE FROM hotel_session WHERE workspace=$1 AND owner=$2", [id, owner.id]);
+      }
       await query("UPDATE hotel_owner SET name=$3,name_key=lower($3),role=$4,active=$5 WHERE workspace=$1 AND id=$2", [id, owner.id, name, role, body.active ?? owner.active]);
       if (name !== owner.name) await query(`UPDATE hotel_record SET data=jsonb_set(data,'{owner}',to_jsonb($3::text)),updated_at=now()
         WHERE workspace=$1 AND data->>'ownerId'=$2`, [id, owner.id, name]);

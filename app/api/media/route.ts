@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { workspaceCookie } from "../../../lib/workspace-cookie";
+import { requestAccess } from "../../../lib/workspace-cookie";
 import { InputError, saveMedia } from "../../../lib/store";
 
 export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
-  const workspace = workspaceCookie(request);
+  const workspace = (await requestAccess(request))?.id;
   if (!workspace) return NextResponse.json({ error: "Lade den Arbeitsbereich bitte neu." }, { status: 401 });
   if (request.headers.get("content-type") !== "image/webp" || !request.body) return NextResponse.json({ error: "Das Bildformat ist ungültig." }, { status: 415 });
   const reader = request.body.getReader();

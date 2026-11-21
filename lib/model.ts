@@ -37,7 +37,10 @@ export type ContentRevision = { record: string; title: string; status: string; c
 export type MediaImage = { file: string; label: string };
 export type ChannelOption = { code: string; label: string; active: boolean };
 export type OwnerOption = { id: string; name: string; role: string; active: boolean };
+export type WorkspaceIdentity = { role: "guest" } | { role: "admin" | "member"; owner: string; name: string; username: string };
+export type AccountSummary = { owner: string; username: string; admin: boolean };
 export type Workspace = { records: RecordItem[]; metrics: Metric[]; campaignMetrics: CampaignMetric[]; revisions: ContentRevision[]; connections: Connection[]; schedules: Schedule[]; media: MediaImage[]; channelOptions: ChannelOption[]; owners: OwnerOption[]; connectorTag: string; ai: boolean };
+export type WorkspaceResponse = Workspace & { identity: WorkspaceIdentity; accounts: AccountSummary[] };
 export const channels = ["Google Ads", "Google Hotel Ads", "Organische Suche", "Metasearch", "Newsletter", "Social Media"];
 export const defaultChannelOptions = [...channels, "Website", "Instagram", "Direktvertrieb", "Content", "Controlling"];
 export const channelLabel = (code: string, options: ChannelOption[]) => options.find((option) => option.code === code)?.label ?? code;

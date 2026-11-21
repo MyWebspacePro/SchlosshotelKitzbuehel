@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Link2, UserRound } from "lucide-react";
 import ChannelSettings from "./channel-settings";
-import type { Connection, ConnectionMode, OwnerOption, Workspace } from "../lib/model";
+import { AccountForm } from "./team-access";
+import type { Connection, ConnectionMode, OwnerOption, WorkspaceResponse } from "../lib/model";
 
 type SettingsAction = (payload: Record<string, unknown>, message: string) => Promise<boolean>;
 const providers: Record<string, { title?: string; account: string; help: string }> = {
@@ -13,29 +14,41 @@ const providers: Record<string, { title?: string; account: string; help: string 
 };
 export const connectionModeLabel: Record<ConnectionMode, string> = { example: "Beispielquelle", import: "Dateiimport", live: "Live-API", off: "Deaktiviert" };
 
-export default function WorkspaceSettings({ data, busy, save }: { data: Workspace; busy: boolean; save: SettingsAction }) {
+export default function WorkspaceSettings({ data, busy, save, refresh }: { data: WorkspaceResponse; busy: boolean; save: SettingsAction; refresh: () => Promise<void> }) {
   const [editing, setEditing] = useState<string>();
+  const [accountEditing, setAccountEditing] = useState<string>();
   const [connection, setConnection] = useState<string>();
+  const canManage = data.identity.role !== "member";
+  const firstAccount = data.identity.role === "guest";
 
   return <>
     <section className="card panel settings-panel">
-      <div className="card-heading"><div><h3>Personen & Zuständigkeiten</h3><p>Aktive Personen stehen in Aufgaben und weiteren Zuständigkeitsfeldern zur Auswahl.</p></div><UserRound size={19} /></div>
-      <PersonForm busy={busy} submit={async (data) => save({ action: "owner-setting", ...data }, "Person gespeichert.")} />
+      <div className="card-heading"><div><h3>Personen, Zuständigkeiten & Zugänge</h3><p>Verwalte Aufgabenverantwortliche und ihre Benutzerkonten.</p></div><UserRound size={19} /></div>
+      {!canManage && <p className="form-help">Benutzerkonten und Einstellungen werden vom Administrator verwaltet.</p>}
+      {canManage && <PersonForm busy={busy} submit={async (data) => save({ action: "owner-setting", ...data }, "Person gespeichert.")} />}
       <ul className="settings-list">
-        {data.owners.map((person) => <li key={person.id} className="settings-row">
+        {data.owners.map((person) => {
+          const account = data.accounts.find((entry) => entry.owner === person.id);
+          return <li key={person.id} className="settings-row">
           {editing === person.id ? <PersonForm person={person} busy={busy} cancel={() => setEditing(undefined)} submit={async (change) => {
             const saved = await save({ action: "owner-setting", id: person.id, ...change }, "Person gespeichert.");
             if (saved) setEditing(undefined);
             return saved;
-          }} /> : <>
-            <div><strong>{person.name}</strong><small>{[person.role, person.active ? "Aktiv" : "Inaktiv"].filter(Boolean).join(" · ")}</small></div>
-            <div className="inline-actions"><button type="button" className="button" onClick={() => setEditing(person.id)}>Bearbeiten</button>
-              <button type="button" className="button" disabled={busy} onClick={() => save({ action: "owner-setting", id: person.id, active: !person.active }, "Person gespeichert.")}>{person.active ? "Deaktivieren" : "Aktivieren"}</button></div>
+          }} /> : accountEditing === person.id ? <div className="settings-account"><strong>{person.name}</strong><AccountForm key={person.id} owner={person.id} account={account} first={firstAccount} onClose={() => setAccountEditing(undefined)} onSaved={async () => {
+            await refresh();
+            setAccountEditing(undefined);
+          }} /></div> : <>
+            <div><strong>{person.name}</strong><small>{[person.role, person.active ? "Aktiv" : "Inaktiv"].filter(Boolean).join(" · ")}</small>
+              {canManage && <small>{account ? (account.admin ? "Administrator" : "Benutzerkonto") + " · " + account.username : "Ohne Benutzerkonto"}</small>}</div>
+            <div className="inline-actions"><button type="button" className="button" disabled={!canManage} onClick={() => setEditing(person.id)}>Bearbeiten</button>
+              <button type="button" className="button" disabled={busy || !canManage || !person.active} onClick={() => setAccountEditing(person.id)}>{account ? "Konto bearbeiten" : "Benutzerkonto einrichten"}</button>
+              <button type="button" className="button" disabled={busy || !canManage || account?.admin} onClick={() => save({ action: "owner-setting", id: person.id, active: !person.active }, "Person gespeichert.")}>{person.active ? "Deaktivieren" : "Aktivieren"}</button></div>
           </>}
-        </li>)}
+        </li>;
+        })}
       </ul>
     </section>
-    <ChannelSettings options={data.channelOptions} busy={busy} onSave={(change) => save({ action: "channel-setting", ...change }, "Kanal gespeichert.")} />
+    <ChannelSettings options={data.channelOptions} busy={busy || !canManage} onSave={(change) => save({ action: "channel-setting", ...change }, "Kanal gespeichert.")} />
     <section className="card panel settings-panel">
       <div className="card-heading"><div><h3>Verbindungen</h3><p>Lege pro Dienst Konto, Profiladresse und Art der Datenübernahme fest.</p></div><Link2 size={19} /></div>
       <ul className="settings-list">{data.connections.map((entry) => <li className="settings-row" key={entry.id}>
@@ -43,10 +56,11 @@ export default function WorkspaceSettings({ data, busy, save }: { data: Workspac
           const saved = await save({ action: "connection-setting", id: entry.id, ...change }, "Verbindung gespeichert.");
           if (saved) setConnection(undefined);
         }} /> : <>
-          <div><strong>{providers[entry.id]?.title ?? entry.name}</strong><small>{connectionModeLabel[entry.mode]}{entry.account && " · " + entry.account}</small></div>
+          <div><strong>{providers[entry.id]?.title ?? entry.name}</strong><small>{connectionModeLabel[entry.mode]}{entry.account && " · " + entry.account}</small>
+            {providers[entry.id] && <small>{entry.liveAvailable ? "API-Zugang hinterlegt" : "Live-API · Freigabe fehlt"}</small>}</div>
           <div className="inline-actions">
             {entry.profile_url && <a href={entry.profile_url} className="button" target="_blank" rel="noreferrer">Profil öffnen</a>}
-            <button type="button" className="button" onClick={() => setConnection(entry.id)}>Konfigurieren</button>
+            <button type="button" className="button" disabled={!canManage} onClick={() => setConnection(entry.id)}>Konfigurieren</button>
           </div>
         </>}
       </li>)}</ul>
@@ -54,6 +68,14 @@ export default function WorkspaceSettings({ data, busy, save }: { data: Workspac
         <p className="form-help">Der Betreiber hinterlegt die Plattformzugänge serverseitig und ordnet sie mit diesem Code dem Arbeitsbereich zu.</p>
         <label className="form-field">Arbeitsbereichscode<input readOnly value={data.connectorTag} onFocus={(event) => event.currentTarget.select()} /></label>
       </details>
+    </section>
+    <section id="feature-status" className="card panel settings-panel" aria-label="Funktionsstatus">
+      <div className="card-heading"><div><h3>Funktionsstatus</h3><p>Welche Funktionen verfügbar sind und welche einen Plattformzugang brauchen.</p></div></div>
+      <ul className="settings-list">
+        <li className="settings-row"><div><strong>KI-Entwürfe und KI-Berichtsauswertung</strong><small>{data.ai ? "OpenAI konfiguriert" : "OpenAI-Zugang fehlt · Textvorlagen verfügbar"}</small></div></li>
+        <li className="settings-row"><div><strong>Instagram-Beiträge</strong><small>PNG- und ZIP-Export verfügbar · Direktveröffentlichung derzeit nicht verfügbar</small></div></li>
+        <li className="settings-row"><div><strong>Newsletter</strong><small>HTML-Export verfügbar · Versand über den Newsletter-Dienst</small></div></li>
+      </ul>
     </section>
   </>;
 }

@@ -18,3 +18,4 @@ jobs:
           server=$!
           trap 'kill "$server" 2>/dev/null || true' EXIT
           npm run test:workflow
+          npm run test:auth

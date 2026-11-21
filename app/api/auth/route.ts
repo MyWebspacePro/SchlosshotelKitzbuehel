@@ -1,0 +1,52 @@
+import { NextRequest, NextResponse } from "next/server";
+import { AuthenticationError, login, logout, saveAccount, throttleAuth, TooManyAttempts } from "../../../lib/accounts";
+import { PasswordServiceBusy } from "../../../lib/passwords";
+import { InputError } from "../../../lib/store";
+import { authenticationCookie, requestAccess, setAuthenticationCookie, setWorkspaceCookie, workspaceCookie } from "../../../lib/workspace-cookie";
+
+export const runtime = "nodejs";
+const send = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
+
+export async function POST(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  if (origin && (!URL.canParse(origin) || new URL(origin).host !== host)) return send({ error: "Ungültiger Ursprung." }, 403);
+  if (!request.headers.get("content-type")?.includes("application/json")) return send({ error: "Ungültiges Format." }, 415);
+  try {
+    if (Number(request.headers.get("content-length")) > 4096) return send({ error: "Die Eingabe ist zu groß." }, 413);
+    const raw = await request.text();
+    if (raw.length > 4096) return send({ error: "Die Eingabe ist zu groß." }, 413);
+    const body = JSON.parse(raw);
+    if (!body || typeof body !== "object") return send({ error: "Die Eingabe ist ungültig." }, 400);
+
+    if (body.action === "logout" || body.action === "guest") {
+      await logout(authenticationCookie(request));
+      const response = send({ ok: true });
+      setAuthenticationCookie(response, "");
+      if (body.action === "guest" && workspaceCookie(request)) setWorkspaceCookie(response, "");
+      return response;
+    }
+    if (body.action === "login" || body.action === "account") {
+      const address = request.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim() || "local";
+      await throttleAuth("address:" + address.slice(0, 64), 50);
+    }
+    if (body.action === "login" || body.action === "account") {
+      const access = body.action === "account" ? await requestAccess(request) : undefined;
+      if (body.action === "account" && (!access || access.role === "member")) return send({ error: "Hierfür ist ein Administratorkonto erforderlich." }, 403);
+      const result = access ? await saveAccount(access, body.owner, body.username, body.password) : await login(body.username, body.password);
+      const response = send({ ok: true });
+      if (result.token) {
+        setAuthenticationCookie(response, result.token);
+        setWorkspaceCookie(response, result.workspace);
+      }
+      return response;
+    }
+    return send({ error: "Ungültige Aktion." }, 400);
+  } catch (error) {
+    if (error instanceof AuthenticationError) return send({ error: "Anmeldung fehlgeschlagen. Prüfe Benutzername und Passwort." }, 401);
+    if (error instanceof TooManyAttempts || error instanceof PasswordServiceBusy) return send({ error: "Zu viele Versuche. Bitte versuche es später erneut." }, 429);
+    if (error instanceof InputError || error instanceof SyntaxError) return send({ error: error instanceof InputError ? error.message : "Ungültige Eingabe." }, 400);
+    console.error("Account operation failed", error instanceof Error ? error.name : "");
+    return send({ error: "Der Zugang konnte nicht verarbeitet werden." }, 500);
+  }
+}

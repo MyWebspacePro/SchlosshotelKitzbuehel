@@ -8,6 +8,8 @@ Mit Node.js 22 im Projektverzeichnis `npm ci` und anschließend `npm run dev -- 
 
 Jeder Browser startet ohne Anmeldung mit einem eigenen synthetischen Datenbestand. Ein Cookie hält die Zuordnung nach dem Neuladen aufrecht. Ein privates Browserfenster startet einen neuen Arbeitsbereich. Die Portalquellen des Startbestands liefern lokal hinterlegte Datensätze. Dateiimporte ergänzen oder aktualisieren den Arbeitsbestand.
 
+Unter **Einstellungen → Personen, Zuständigkeiten & Zugänge → Benutzerkonto einrichten** erhält eine Person einen Benutzernamen und ein Passwort. Das erste Konto schützt den bestehenden Arbeitsbereich und erhält Administratorrechte. Weitere Konten werden dort vom Administrator angelegt. Über **Team anmelden** arbeiten diese Personen im gemeinsamen Bestand. Der öffentliche Einstieg führt weiterhin in einen separaten Arbeitsbereich. Administratoren können Kennwörter neu setzen und Zugänge über die Personenliste deaktivieren.
+
 ## Arbeitsabläufe
 
 - In **Website & Direktvertrieb** ein Angebot mit einem Foto aus der Mediathek anlegen oder bearbeiten und die Preise vergleichen. Bei einer Abweichung wird eine Aufgabe erzeugt, sofern für das Angebot noch keine offene Aufgabe besteht. Nach einem korrigierten Quellwert dieselbe Prüfung erneut starten.
