@@ -81,6 +81,22 @@ state = await requestWorkspace({ action: "save", kind: "content", id: content.id
 assert.deepEqual(state.revisions.filter((r) => r.record === content.id).map((r) => r.status), ["Freigegeben", "Entwurf", "Freigegeben"]);
 state = await requestWorkspace({ action: "report", title: "Prüfbericht", from: "2026-11-20", to: "2026-11-20" });
 assert.match(state.records.find((r) => r.data.title === "Prüfbericht").data.description, /Ablaufprüfung Winter · Pausiert.*1 freigegebene Inhalte/);
+const storedReport = (current, title) => current.records.find((entry) => entry.kind === "report" && entry.data.title === title).data.report;
+state = await requestWorkspace({ action: "report", kind: "campaigns", from: "2026-11-20", to: "2026-11-20" });
+assert.deepEqual(storedReport(state, "Kampagnenleistung").campaigns.find((r) => r.name === campaign.data.title), {
+  name: campaign.data.title, status: "Pausiert", cost: 60, bookings: 10, approved: 1, budget: 100
+});
+state = await requestWorkspace({ action: "report", kind: "website", from: "2026-11-20", to: "2026-11-20" });
+assert.equal(storedReport(state, "Website & Direktbuchungen").daily.length, 1);
+assert.equal(storedReport(state, "Website & Direktbuchungen").daily[0].figures.visits, storedReport(state, "Website & Direktbuchungen").totals.visits);
+state = await requestWorkspace({ action: "report", kind: "reviews" });
+assert.equal(storedReport(state, "Gästebewertungen").reviews.total.count, 3);
+assert.equal(storedReport(state, "Gästebewertungen").reviews.total.draft, 1);
+assert.equal(storedReport(state, "Gästebewertungen").from, "");
+state = await requestWorkspace({ action: "report", kind: "agencies" });
+assert.ok(storedReport(state, "Agenturbudgets").agencies.some((row) => row.name === "Performance Marketing" && row.budget === 4800));
+await requestWorkspace({ action: "report", kind: "falsch" }, 400);
+await requestWorkspace({ action: "report", kind: "website", from: "2026-11-20", to: "2026-11-19" }, 400);
 await requestWorkspace({ action: "save", kind: "campaign", id: campaign.id, data: {
   ...campaign.data, status: "Pausiert", start: "2026-11-21"
 } });

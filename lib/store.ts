@@ -6,13 +6,13 @@ import { Pool, type QueryResultRow } from "pg";
 import { availabilityLabel, brandImages, campaignRowsFor, channelCode, channels, defaultChannelOptions, offerComparison, priceEuro, sum, euro, type CampaignMetric, type ChannelOption, type ContentRevision, type Connection, type Data, type Kind, type MediaImage, type Metric, type OwnerOption, type RecordItem, type Schedule, type SlideCrop, type Workspace } from "./model";
 import { connectors, examples, feed } from "./seed";
 import { checkWebsite } from "./website-check";
-import { createReportSnapshot, reportDescription } from "./report";
+import { createReportSnapshot, reportDescription, reportKinds, type ReportKind } from "./report";
 import { importFields, type Dataset } from "./import-fields";
 import { connectorTag, importProvider, liveAvailable, validProviderAccount } from "./providers";
 
 type Query = <T extends QueryResultRow>(sql: string, args?: unknown[]) => Promise<{ rows: T[] }>;
-type Database = { query: Query; transaction: <T>(work: (query: Query) => Promise<T>) => Promise<T> };
-const cached = globalThis as typeof globalThis & { hotelDatabase?: Promise<Database>; hotelMediaMigration?: Promise<unknown>; hotelChannelMigration?: Promise<unknown>; hotelScheduler?: ReturnType<typeof setInterval> };
+type Database = { query: Query; migrate: (sql: string) => Promise<unknown>; transaction: <T>(work: (query: Query) => Promise<T>) => Promise<T> };
+const cached = globalThis as typeof globalThis & { hotelDatabase?: Promise<Database>; hotelSchemas?: Map<string, Promise<Database>>; hotelSchemaUpdate?: Promise<Database>; hotelMediaMigration?: Promise<unknown>; hotelChannelMigration?: Promise<unknown>; hotelScheduler?: ReturnType<typeof setInterval> };
 const schema = `
   CREATE TABLE IF NOT EXISTS hotel_workspace (id uuid PRIMARY KEY, ready boolean NOT NULL DEFAULT false, created_at timestamptz DEFAULT now());
   CREATE TABLE IF NOT EXISTS hotel_record (
@@ -67,9 +67,9 @@ const schema = `
 async function open(): Promise<Database> {
   if (process.env.DATABASE_URL) {
     const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-    await pool.query(schema);
     return {
       query: (sql, args) => pool.query(sql, args),
+      migrate: (sql) => pool.query(sql),
       transaction: async (work) => {
         const client = await pool.connect();
         try {
@@ -86,15 +86,31 @@ async function open(): Promise<Database> {
   }
   await mkdir(resolve(".data"), { recursive: true });
   const local = await PGlite.create(resolve(".data/postgres"));
-  await local.exec(schema);
   return {
     query: (sql, args) => local.query(sql, args),
+    migrate: (sql) => local.exec(sql),
     transaction: (work) => local.transaction((tx) => work((sql, args) => tx.query(sql, args)))
   };
 }
-function database() {
-  cached.hotelDatabase ??= open().catch((error) => { cached.hotelDatabase = undefined; throw error; });
-  return cached.hotelDatabase;
+function database(): Promise<Database> {
+  // Next.js keeps the connection alive across development reloads. Apply any new
+  // schema before the updated code uses it, without reopening the PGlite files.
+  const schemas = cached.hotelSchemas ??= new Map<string, Promise<Database>>();
+  const ready = schemas.get(schema);
+  if (ready) return ready;
+
+  const previous = cached.hotelSchemaUpdate;
+  const migration = (async () => {
+    await previous?.catch(() => {});
+    cached.hotelDatabase ??= open().catch((error) => { cached.hotelDatabase = undefined; throw error; });
+    const db = await cached.hotelDatabase;
+    await db.migrate(schema);
+    return db;
+  })();
+  schemas.set(schema, migration);
+  cached.hotelSchemaUpdate = migration;
+  void migration.catch(() => { schemas.delete(schema); });
+  return migration;
 }
 
 function workspaceTransaction<T>(db: Database, workspace: string, work: (query: Query) => Promise<T>) {
@@ -754,12 +770,18 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
     const response = await generateText("Fasse die vorliegenden Kennzahlen auf Deutsch knapp für die Direktion zusammen. Übernimm Beträge, Buchungszahlen und Zeitraum unverändert. Unterscheide Beobachtung und Hypothese ausdrücklich. Nenne die wichtigste Prüfmaßnahme. Erfinde keine Vergleichswerte, Ursachen, Prognosen oder Kennzahlen.", { report: facts });
     await revise(query, id, item, { ...item.data, response, source: "OpenAI" });
   } else if (body.action === "report") {
-    const label = text(body.title ?? "Direktionsbericht", "Titel", 120);
-    const from = body.from ? date(body.from) : state.metrics[0]?.day;
-    const to = body.to ? date(body.to) : state.metrics.at(-1)?.day;
-    const rows = state.metrics.filter((m) => (!from || m.day >= from) && (!to || m.day <= to));
-    if (!rows.length) throw new InputError("Der Zeitraum enthält keine Kennzahlen.");
-    const snapshot = createReportSnapshot(state, rows, from || rows[0].day, to || rows.at(-1)!.day);
+    const requestedKind = body.kind ?? "overview";
+    if (typeof requestedKind !== "string" || !Object.hasOwn(reportKinds, requestedKind)) throw new InputError("Wähle einen gültigen Berichtstyp.");
+    const kind = requestedKind as ReportKind;
+    const definition = reportKinds[kind];
+    const label = text(body.title ?? "", "Titel", 120) || definition.label;
+    const dates = kind === "campaigns" && state.campaignMetrics.length ? state.campaignMetrics : state.metrics;
+    const from = definition.period ? (body.from ? date(body.from) : dates[0]?.day) : "";
+    const to = definition.period ? (body.to ? date(body.to) : dates.at(-1)?.day) : "";
+    if (definition.period && (!from || !to || from > to)) throw new InputError("Wähle einen gültigen Zeitraum.");
+    const rows = definition.period && kind !== "campaigns" ? state.metrics.filter((m) => m.day >= from! && m.day <= to!) : [];
+    if ((kind === "overview" || kind === "website") && !rows.length) throw new InputError("Der Zeitraum enthält keine Kennzahlen.");
+    const snapshot = createReportSnapshot(state, rows, from ?? "", to ?? "", kind);
     const report: Data = { title: label, description: reportDescription(snapshot), status: "Erstellt", report: snapshot };
     if (runId) await query(`INSERT INTO hotel_record (workspace,id,kind,data) VALUES ($1,$2,'report',$3::jsonb) ON CONFLICT DO NOTHING`, [id, runId, JSON.stringify(report)]);
     else await save(query, id, randomUUID(), "report", report);
@@ -788,7 +810,7 @@ export function startScheduler() {
         try {
           const runId = "run-" + createHash("sha256").update(JSON.stringify([job.workspace, job.action, job.slot])).digest("hex");
           if (job.action !== "report") await perform(job.workspace, { action: job.action }, runId);
-          else await perform(job.workspace, { action: "report", title: "Geplanter Direktionsbericht" }, runId);
+          else await perform(job.workspace, { action: "report", title: "Automatische Leistungsübersicht" }, runId);
         } catch (error) {
           console.error(error);
           status = "Fehlgeschlagen";

@@ -13,6 +13,8 @@ import WorkspaceSettings, { connectionModeLabel } from "./workspace-settings";
 import { Choice, MoneyField } from "./form-fields";
 import OfferEditor from "./offer-editor";
 import ReportView from "./report-view";
+import { ReportCatalog, ReportCreation } from "./report-creation";
+import { reportTitle, type ReportKind } from "../lib/report";
 import MetricImport from "./metric-import";
 import type { Dataset } from "../lib/import-fields";
 import { websitePages } from "../lib/website";
@@ -31,7 +33,7 @@ const nav = [
   { id: "settings", label: "Einstellungen", icon: Settings }
 ] as const;
 type Page = typeof nav[number]["id"];
-type Modal = { type: "edit"; kind: Kind; item?: RecordItem } | { type: "import"; campaign?: string; dataset?: Dataset } | { type: "search" | "report" };
+type Modal = { type: "edit"; kind: Kind; item?: RecordItem } | { type: "import"; campaign?: string; dataset?: Dataset } | { type: "search" } | { type: "report"; kind?: ReportKind };
 const deleteLabels: Partial<Record<Kind, [string, string]>> = {
   campaign: ["Kampagne", "Die zugehörigen Kampagnenmesswerte werden entfernt. Verknüpfte Beiträge und Aufgaben bleiben erhalten."],
   offer: ["Angebot", "Kampagnen, Beiträge und Prüfeinträge bleiben erhalten. Ihre Verknüpfung mit diesem Angebot wird gelöst."],
@@ -52,7 +54,7 @@ const headings: Record<Exclude<Page, "home">, [string, string]> = {
   content: ["Content-Studio", "Erstelle und prüfe Instagram-Carousels und Newsletter."],
   review: ["Bewertungen", "Übernimm Gästebewertungen aus Google und Booking.com und bearbeite die Antworten."],
   task: ["Aufgaben", "Verfolge Auffälligkeiten, Freigaben und technische Maßnahmen."],
-  report: ["Berichte", "Erstelle einen Direktionsbericht aus Kennzahlen und Maßnahmen."],
+  report: ["Berichte", "Wähle einen Berichtstyp oder öffne einen gespeicherten Bericht."],
   agency: ["Agenturen & Budget", "Behalte vereinbarte Leistungen und Ausgaben im Blick."],
   connections: ["Datenquellen", "Importiere Daten und prüfe den Stand deiner Abrufe."],
   settings: ["Einstellungen", "Verwalte Personen, Kanäle und Kontoverbindungen für diesen Arbeitsbereich."]
@@ -258,7 +260,7 @@ export default function Cockpit() {
             }}><RefreshCw size={17} /></button></div>
               {(["check", "report", "campaign-automation"] as const).map((target) => {
                 const schedule = data?.schedules.find((item) => item.action === target);
-                const label = { check: "Angebotsprüfung", report: "Direktionsbericht", "campaign-automation": "Kampagnenregeln" }[target];
+                const label = { check: "Angebotsprüfung", report: "Leistungsübersicht", "campaign-automation": "Kampagnenregeln" }[target];
                 return <div className="record-row static" key={target}><div><strong>{label}</strong><small>{schedule ? [schedule.last_status, "Nächster Lauf " + localTime(schedule.next_at)].filter(Boolean).join(" · ") : "Aus"}</small></div>
                   <select className="schedule-select" value={schedule?.hours ?? 0} disabled={busy} aria-label={label + " Zeitplan"} onChange={(e) => action({ action: "schedule", target, hours: Number(e.target.value) }, "Zeitplan gespeichert.")}>
                     <option value={0}>Aus</option><option value={1}>Stündlich</option><option value={6}>Alle 6 Stunden</option><option value={24}>Täglich</option><option value={168}>Wöchentlich</option>
@@ -301,7 +303,12 @@ export default function Cockpit() {
                 {activeItem.data.status === "Freigegeben" && <button className="button" disabled={busy} onClick={() => action({ action: "withdraw-content", id: activeItem.id }, "Freigabe zurückgenommen. Der Beitrag ist ein Entwurf.")}>Freigabe zurücknehmen</button>}
               </div>}
               generate={activeItem ? () => action({ action: "draft", id: activeItem.id }, "Textentwurf gespeichert.") : undefined} />}
-          </div> : <>
+          </div> : page === "report" ? <>
+            <ReportCatalog onSelect={(kind) => open({ type: "report", kind })} />
+            {activeItem ? <ReportView item={activeItem} reports={visibleRecords} select={setSelected} busy={busy} remove={() => confirmDelete(activeItem)}
+              analyse={data?.ai ? () => action({ action: "report-analysis", id: activeItem.id }, "KI-Auswertung gespeichert.") : undefined} />
+              : <section className="card table-card"><Empty>Gespeicherte Berichte erscheinen hier.</Empty></section>}
+          </> : <>
             {page === "campaign" && <section className="card table-card panel"><div className="card-heading"><div><h3>Kampagnenperformance</h3><p>Zuordnung über die importierten Kampagnendaten</p></div><button className="button" onClick={() => open({ type: "import" })}><Plus size={16} /> Daten importieren</button></div>
               <div className="table-wrap"><table><thead><tr><th>Kampagne</th><th>Gültige Messwerte</th><th>Buchungen</th><th>Ist-Kosten</th><th>Budget</th><th>Freigegebene Inhalte</th></tr></thead><tbody>
                 {campaigns.map((campaign) => {
@@ -320,10 +327,8 @@ export default function Cockpit() {
             {["task", "review", "campaign"].includes(page) && <div className="filter-bar">{["Alle", ...(statuses[page as Kind] ?? [])].map((status) => <button className={statusFilter === status ? "active-filter" : ""} aria-pressed={statusFilter === status} key={status} onClick={() => setStatusFilter(status)}>{status}</button>)}</div>}
             {page === "offer" ? <section className="offer-grid" aria-label="Angebote">
               {offers.length ? offers.map((offer) => <OfferCard key={offer.id} item={offer} onClick={() => open({ type: "edit", kind: "offer", item: offer })} />) : <div className="card"><Empty>Lege ein Angebot an oder importiere es aus einer Datei.</Empty></div>}
-            </section> : page === "report" && activeItem ? <ReportView item={activeItem} reports={visibleRecords} select={setSelected} busy={busy} remove={() => confirmDelete(activeItem)}
-              analyse={data?.ai ? () => action({ action: "report-analysis", id: activeItem.id }, "KI-Auswertung gespeichert.") : undefined} />
-            : <section className="card table-card">
-              {visibleRecords.length === 0 && <Empty>{page === "report" ? "Erstelle einen Bericht für einen Zeitraum mit Kennzahlen." : "Für diese Ansicht gibt es derzeit keine Einträge."}</Empty>}
+            </section> : <section className="card table-card">
+              {visibleRecords.length === 0 && <Empty>Für diese Ansicht gibt es derzeit keine Einträge.</Empty>}
               {visibleRecords.map((r) => <RecordRow key={r.id} item={r} channelOptions={channelOptions} onClick={() => open({ type: "edit", kind: r.kind, item: r })} />)}
             </section>}
             {page === "campaign" && <CampaignCalendar campaigns={campaigns} select={(item) => open({ type: "edit", kind: "campaign", item })} />}
@@ -351,7 +356,7 @@ export default function Cockpit() {
       </main>
     </div>
     {modal && <Dialog close={closeModal} active={!pendingDelete} variant={offerBeingEdited ? "offer" : undefined}
-      title={modal.type === "edit" ? (offerBeingEdited ? (modal.item ? "Angebot bearbeiten" : "Angebot anlegen") : modal.item ? "Eintrag bearbeiten" : "Neuer Eintrag") : modal.type === "import" ? "Daten importieren" : modal.type === "search" ? "Arbeitsbereich durchsuchen" : "Direktionsbericht erstellen"}>
+      title={modal.type === "edit" ? (offerBeingEdited ? (modal.item ? "Angebot bearbeiten" : "Angebot anlegen") : modal.item ? "Eintrag bearbeiten" : "Neuer Eintrag") : modal.type === "import" ? "Daten importieren" : modal.type === "search" ? "Arbeitsbereich durchsuchen" : "Bericht erstellen"}>
       {problem && <div className="notice error" role="alert">{problem}</div>}
       {campaignBeingEdited && <div className="inline-actions campaign-management">
         {campaignBeingEdited.data.status === "Aktiv" && <button className="button" disabled={busy} onClick={() => action({ action: "campaign-status", id: campaignBeingEdited.id, status: "Pausiert" }, "Kampagne pausiert.", true)}>Kampagne pausieren</button>}
@@ -368,14 +373,13 @@ export default function Cockpit() {
         draft={modal.item ? () => action({ action: "draft", id: modal.item?.id }, "Entwurf gespeichert.", true) : undefined} />)}
       {modal.type === "import" && <MetricImport campaigns={campaigns} channelOptions={channelOptions} initialCampaign={modal.campaign} initialDataset={modal.dataset} busy={busy}
         submit={(rows, campaign, dataset, filename) => action({ action: "import", rows, campaign, dataset, filename }, dataset === "metrics" ? "Kennzahlen importiert." : "Daten importiert.", true)} />}
-      {modal.type === "report" && <form onSubmit={(e) => {
-        e.preventDefault(); const f = new FormData(e.currentTarget);
-        void action({ action: "report", title: f.get("title"), from: f.get("from"), to: f.get("to") }, "Direktionsbericht erstellt.", true).then((success) => { if (success) move("report"); });
-      }}>
-        <label className="form-field">Titel<input name="title" defaultValue="Direktionsbericht" required /></label>
-        <div className="fields"><label className="form-field">Von<input name="from" type="date" defaultValue={first} /></label><label className="form-field">Bis<input name="to" type="date" defaultValue={latest} /></label></div>
-        <button className="button primary" disabled={busy}>Bericht erstellen</button>
-      </form>}
+      {modal.type === "report" && <ReportCreation initial={modal.kind} first={first} latest={latest}
+        campaignFirst={data?.campaignMetrics[0]?.day} campaignLatest={data?.campaignMetrics.at(-1)?.day} busy={busy} save={async (values) => {
+        const result = await action({ action: "report", ...values }, "Bericht erstellt.", true);
+        if (!result) return;
+        move("report");
+        setSelected(result.records.find((row) => row.kind === "report" && !records.some((old) => old.id === row.id))?.id ?? "");
+      }} />}
       {modal.type === "search" && <>
         <label className="form-field">Suchbegriff<input placeholder="Angebot, Kampagne, Aufgabe …" value={query} onChange={(e) => setQuery(e.target.value)} autoFocus /></label>
         {query.trim() && records.filter((r) => r.kind !== "check" && r.kind !== "sitecheck" && r.kind !== "automation" && r.kind !== "import" && (r.data.title + " " + r.data.description).toLocaleLowerCase().includes(query.toLocaleLowerCase().trim())).slice(0, 12).map((r) => <RecordRow key={r.id} item={r} onClick={() => {
@@ -386,7 +390,7 @@ export default function Cockpit() {
       </>}
     </Dialog>}
     {pendingDelete && deleteLabel && <Dialog title={deleteLabel[0] + " löschen"} close={() => { if (!busy) cancelDelete(); }}>
-      <p className="confirm-copy"><strong>{pendingDelete.data.title}</strong> wird dauerhaft aus diesem Arbeitsbereich gelöscht.</p>
+      <p className="confirm-copy"><strong>{pendingDelete.kind === "report" ? reportTitle(pendingDelete.data.title) : pendingDelete.data.title}</strong> wird dauerhaft aus diesem Arbeitsbereich gelöscht.</p>
       {deleteLabel[1] && <p className="form-help">{deleteLabel[1]}</p>}
       {problem && <div className="notice error" role="alert">{problem}</div>}
       <div className="inline-actions confirm-actions">
