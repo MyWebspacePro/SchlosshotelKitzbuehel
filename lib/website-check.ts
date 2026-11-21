@@ -1,7 +1,7 @@
 import type { Data } from "./model";
 import { websitePages } from "./website";
 
-const cache = new Map<string, { until: number; result: Promise<Data> }>();
+const pending = new Map<string, Promise<Data>>();
 const clean = (html: string) => html.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/\s+/g, " ").trim();
 function attributes(tag: string) {
   return Object.fromEntries(Array.from(tag.matchAll(/([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g),
@@ -52,9 +52,9 @@ async function readPage(title: string, url: string): Promise<Data> {
 export function checkWebsite(url: string) {
   const page = websitePages.find((item) => item[1] === url);
   if (!page) return undefined;
-  const previous = cache.get(url);
-  if (previous && previous.until > Date.now()) return previous.result;
-  const result = readPage(page[0], url);
-  cache.set(url, { result, until: Date.now() + 120_000 });
+  const previous = pending.get(url);
+  if (previous) return previous;
+  const result = readPage(page[0], url).finally(() => pending.delete(url));
+  pending.set(url, result);
   return result;
 }
