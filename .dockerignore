@@ -1,0 +1,10 @@
+node_modules
+.next
+.data
+.git
+.github
+.env*
+*.tsbuildinfo
+Bilder von Webseite
+schlosshotel_bg1.webp
+LOGO_schlosshotel.svg

@@ -1,0 +1,33 @@
+{
+  "name": "schlosshotel-digital",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack -H 127.0.0.1",
+    "build": "next build --webpack",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test:workflow": "node scripts/verify-workflow.mjs"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.3.15",
+    "@tailwindcss/postcss": "4.2.4",
+    "@types/pdfkit": "^0.17.7",
+    "fflate": "^0.8.2",
+    "lucide-react": "0.577.0",
+    "next": "16.2.9",
+    "pdfkit": "^0.20.2",
+    "pg": "8.22.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "read-excel-file": "^9.3.20",
+    "tailwindcss": "4.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/pg": "8.20.4",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "5.9.3"
+  }
+}

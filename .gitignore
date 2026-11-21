@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.data/
+.env*
+!.env.example
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+/Bilder von Webseite/
+/LOGO_schlosshotel.svg
+/schlosshotel_bg1.webp
+/Eingabeprompt.md

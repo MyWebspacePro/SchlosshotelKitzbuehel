@@ -1,0 +1,23 @@
+services:
+  web:
+    networks:
+      - default
+      - coolify
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: coolify
+      traefik.http.services.schlosshotel-cockpit.loadbalancer.server.port: "3000"
+      traefik.http.routers.schlosshotel-cockpit-http.entrypoints: http
+      traefik.http.routers.schlosshotel-cockpit-http.rule: Host(`schlosshotelkitzbuehel.aiconso.eu`)
+      traefik.http.routers.schlosshotel-cockpit-http.service: schlosshotel-cockpit
+      traefik.http.routers.schlosshotel-cockpit-http.middlewares: schlosshotel-cockpit-https
+      traefik.http.middlewares.schlosshotel-cockpit-https.redirectscheme.scheme: https
+      traefik.http.routers.schlosshotel-cockpit.entrypoints: https
+      traefik.http.routers.schlosshotel-cockpit.rule: Host(`schlosshotelkitzbuehel.aiconso.eu`)
+      traefik.http.routers.schlosshotel-cockpit.service: schlosshotel-cockpit
+      traefik.http.routers.schlosshotel-cockpit.tls: "true"
+      traefik.http.routers.schlosshotel-cockpit.tls.certresolver: letsencrypt
+
+networks:
+  coolify:
+    external: true
