@@ -5,18 +5,18 @@ import {
   Activity, ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, BarChart3, CalendarDays,
   Check, ChevronDown, CircleAlert, ClipboardList, Download, Euro, Globe, Image as ImageIcon,
   LayoutGrid, LineChart, Link2, Megaphone, Menu, MessageSquare, MousePointer2,
-  Plus, RefreshCw, Search, Sparkles, Star, X
+  Plus, RefreshCw, Search, Settings, Sparkles, Star, X
 } from "lucide-react";
 import ContentStudio, { contentFormat, type ContentFormat } from "./content-studio";
 import CampaignCalendar from "./campaign-calendar";
-import ChannelSettings from "./channel-settings";
+import WorkspaceSettings, { connectionModeLabel } from "./workspace-settings";
 import { Choice, MoneyField } from "./form-fields";
 import OfferEditor from "./offer-editor";
 import ReportView from "./report-view";
 import MetricImport from "./metric-import";
 import type { Dataset } from "../lib/import-fields";
 import { websitePages } from "../lib/website";
-import { availabilityLabel, campaignRowsFor, channelLabel, euro, number, offerComparison, pct, priceEuro, sum, type ChannelOption, type Connection, type Kind, type MediaImage, type Metric, type RecordItem, type Workspace } from "../lib/model";
+import { availabilityLabel, campaignRowsFor, channelLabel, euro, number, offerComparison, pct, priceEuro, sum, type ChannelOption, type Connection, type Kind, type MediaImage, type Metric, type OwnerOption, type RecordItem, type Workspace } from "../lib/model";
 
 const nav = [
   { id: "home", label: "Übersicht", icon: LayoutGrid },
@@ -27,7 +27,8 @@ const nav = [
   { id: "task", label: "Aufgaben", icon: ClipboardList },
   { id: "report", label: "Berichte", icon: BarChart3 },
   { id: "agency", label: "Agenturen & Budget", icon: Euro },
-  { id: "connections", label: "Datenquellen", icon: Link2 }
+  { id: "connections", label: "Datenquellen", icon: Link2 },
+  { id: "settings", label: "Einstellungen", icon: Settings }
 ] as const;
 type Page = typeof nav[number]["id"];
 type Modal = { type: "edit"; kind: Kind; item?: RecordItem } | { type: "import"; campaign?: string; dataset?: Dataset } | { type: "search" | "report" };
@@ -49,11 +50,12 @@ const headings: Record<Exclude<Page, "home">, [string, string]> = {
   campaign: ["Kampagnen", "Plane Maßnahmen und vergleiche die Leistung deiner Vertriebskanäle."],
   offer: ["Website & Direktvertrieb", "Prüfe veröffentlichte Angebote gegen die Daten deiner Buchungsquellen."],
   content: ["Content-Studio", "Erstelle und prüfe Instagram-Carousels und Newsletter."],
-  review: ["Bewertungen", "Bearbeite Rückmeldungen aus den verbundenen Portalen."],
+  review: ["Bewertungen", "Übernimm Gästebewertungen aus Google und Booking.com und bearbeite die Antworten."],
   task: ["Aufgaben", "Verfolge Auffälligkeiten, Freigaben und technische Maßnahmen."],
   report: ["Berichte", "Erstelle einen Direktionsbericht aus Kennzahlen und Maßnahmen."],
   agency: ["Agenturen & Budget", "Behalte vereinbarte Leistungen und Ausgaben im Blick."],
-  connections: ["Datenquellen", "Synchronisiere fiktive Quellen und importiere eigene Kennzahlen."]
+  connections: ["Datenquellen", "Importiere Daten und prüfe den Stand deiner Abrufe."],
+  settings: ["Einstellungen", "Verwalte Personen, Kanäle und Kontoverbindungen für diesen Arbeitsbereich."]
 };
 const short = (date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.slice(8, 10) + "." + date.slice(5, 7) + "." : date;
 const localTime = (date: string) => new Intl.DateTimeFormat("de-AT", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Vienna" }).format(new Date(date));
@@ -165,6 +167,8 @@ export default function Cockpit() {
 
   const records = data?.records ?? [];
   const channelOptions = data?.channelOptions ?? [];
+  const sources = data?.connections ?? [];
+  const reviewSources = sources.filter((entry) => entry.category === "Bewertungen" && (entry.mode === "example" || entry.mode === "live" && entry.liveAvailable));
   const metrics = data?.metrics ?? [];
   const latest = metrics.at(-1)?.day;
   const lastDate = latest ? Date.parse(latest) : undefined;
@@ -181,7 +185,8 @@ export default function Cockpit() {
     const difference = priceDiffers && availabilityDiffers ? "Preis und Verfügbarkeit weichen ab" : priceDiffers ? "Preis weicht ab" : "Verfügbarkeit weicht ab";
     return [{ offer, difference }];
   });
-  const visibleRecords = records.filter((r) => r.kind === page && (statusFilter === "Alle" || r.data.status === statusFilter));
+  const visibleRecords = records.filter((r) => r.kind === page && (statusFilter === "Alle" || r.data.status === statusFilter) &&
+    (r.kind !== "review" || !/^r[123]$/.test(r.id) || sources.some((source) => source.name === r.data.channel && source.mode === "example")));
   const activeItem = draftFormat ? undefined : visibleRecords.find((r) => r.id === selected) ?? visibleRecords[0];
   const campaignBeingEdited = modal?.type === "edit" && modal.kind === "campaign" ? modal.item : undefined;
   const offerBeingEdited = modal?.type === "edit" && modal.kind === "offer";
@@ -232,16 +237,20 @@ export default function Cockpit() {
           <section className="card table-card"><div className="card-heading"><div><h3>Kanäle im Vergleich</h3><p>Direktvertrieb im ausgewählten Zeitraum</p></div><button className="text-button" onClick={() => move("campaign")}>Kampagnen <ArrowRight size={16} /></button></div><ChannelTable metrics={visible} channelOptions={channelOptions} /></section>
         </> : <>
           <div className="page-heading"><div><h1>{headings[page][0]}</h1><p>{headings[page][1]}</p></div><div className="page-actions">
-            {page === "connections" ? <button className="button primary" onClick={() => open({ type: "import" })}><Plus size={17} /> Daten importieren</button>
+            {page === "settings" ? null
+            : page === "review" ? <><button className="button" onClick={() => open({ type: "import", dataset: "reviews" })}><Download size={16} /> Bewertungen importieren</button>
+              {reviewSources.map((source) => <button key={source.id} className="button primary" disabled={busy} onClick={() => action({ action: "sync", id: source.id }, source.name + " abgeglichen.")}>
+                <RefreshCw size={16} /> {source.id === "google" ? "Google" : source.name} {source.mode === "live" ? "abrufen" : "Beispiele laden"}</button>)}</>
+            : page === "connections" ? <button className="button primary" onClick={() => open({ type: "import" })}><Plus size={17} /> Daten importieren</button>
             : page === "report" ? <button className="button primary" onClick={() => open({ type: "report" })}><Plus size={17} /> Bericht erstellen</button>
             : page === "content" ? <><button className="button" disabled={!data} onClick={() => setDraftFormat("newsletter")}><Plus size={17} /> Newsletter</button><button className="button primary" disabled={!data} onClick={() => setDraftFormat("instagram")}><Plus size={17} /> Instagram-Carousel</button></>
             : page === "offer" ? <><button className="button" onClick={() => open({ type: "import", dataset: "offers" })}>Angebote importieren</button><button className="button" onClick={() => open({ type: "edit", kind: "offer" })}><Plus size={17} /> Angebot</button><button className="button primary" disabled={busy || !offers.length} onClick={() => action({ action: "check" }, "Angebotsprüfung abgeschlossen.")}><Activity size={17} /> Prüfung starten</button></>
-            : <button className="button primary" onClick={() => open({ type: "edit", kind: page })}><Plus size={17} /> {({ campaign: "Kampagne", review: "Bewertung", task: "Aufgabe", agency: "Agentur" })[page]} anlegen</button>}
+            : <button className="button primary" onClick={() => open({ type: "edit", kind: page })}><Plus size={17} /> {({ campaign: "Kampagne", task: "Aufgabe", agency: "Agentur" })[page]} anlegen</button>}
           </div></div>
-          {page === "connections" ? <>
-            <ChannelSettings options={channelOptions} busy={busy || !data} onSave={async (change) => Boolean(await action({ action: "channel-setting", ...change }, "Kanal gespeichert."))} />
-            <section className="card panel"><div className="card-heading"><div><h3>Verbindungen</h3><p>Die Synchronisation lädt die lokal hinterlegten Beispieldaten.</p></div></div>
-              <div className="connection-grid">{(data?.connections ?? []).map((c) => <div className="connection" key={c.id}><span className="focus-icon"><Link2 size={18} /></span><div><strong>{c.name}</strong><small>{c.category} · Demoverbindung</small>{c.last_sync && <small>Stand {localTime(c.last_sync)}</small>}{c.last_result && <small>{c.last_result}</small>}</div><button className="icon-button" aria-label={c.name + " synchronisieren"} title="Demodaten synchronisieren" disabled={busy} onClick={() => action({ action: "sync", id: c.id }, c.name + " wurde synchronisiert.")}><RefreshCw size={17} /></button></div>)}</div>
+          {page === "settings" ? (data && <WorkspaceSettings data={data} busy={busy} save={async (payload, message) => Boolean(await action(payload, message))} />)
+          : page === "connections" ? <>
+            <section className="card panel"><div className="card-heading"><div><h3>Quellenstatus</h3><p>Ergebnisse des letzten Abrufs pro Dienst.</p></div><button className="button" onClick={() => move("settings")}><Settings size={16} /> Verbindungen konfigurieren</button></div>
+              <div className="connection-grid">{sources.map((c) => <div className="connection" key={c.id}><span className="focus-icon"><Link2 size={18} /></span><div><strong>{c.name}</strong><small>{c.category} · {connectionModeLabel[c.mode]}</small>{c.last_sync && <small>Stand {localTime(c.last_sync)}</small>}{c.last_result && <small>{c.last_result}</small>}</div>{(c.mode === "example" || c.mode === "live" && c.liveAvailable) && <button className="icon-button" aria-label={c.name + " synchronisieren"} title={c.mode === "live" ? "Live-Daten abrufen" : "Beispieldaten abgleichen"} disabled={busy} onClick={() => action({ action: "sync", id: c.id }, c.name + " wurde synchronisiert.")}><RefreshCw size={17} /></button>}</div>)}</div>
             </section>
             <section className="card table-card panel"><div className="card-heading"><div><h3>Zeitpläne</h3><p>Automatische Prüfungen und Direktionsberichte</p></div><button className="icon-button" title="Zeitpläne aktualisieren" aria-label="Zeitpläne aktualisieren" onClick={async () => {
               try { const r = await fetch("/api/workspace"); if (!r.ok) throw new Error(); setData(await r.json()); }
@@ -353,7 +362,7 @@ export default function Cockpit() {
       {modal.type === "edit" && (modal.kind === "offer" ? <OfferEditor item={modal.item} sources={data?.connections ?? []} media={data?.media ?? []} onMediaAdded={addMedia} onMediaDeleted={removeMedia} busy={busy} close={closeModal}
         remove={modal.item ? () => confirmDelete(modal.item!) : undefined}
         save={(values) => action({ action: "save", kind: "offer", id: modal.item?.id, data: values }, "Angebot gespeichert.", true)} />
-        : <Editor kind={modal.kind} item={modal.item} offers={offers} sources={data?.connections ?? []} channelOptions={channelOptions} busy={busy} ai={data?.ai ?? false}
+        : <Editor kind={modal.kind} item={modal.item} offers={offers} sources={sources} owners={data?.owners ?? []} channelOptions={channelOptions} busy={busy} ai={data?.ai ?? false}
         remove={modal.item && modal.kind !== "campaign" && deleteLabels[modal.kind] ? () => confirmDelete(modal.item!) : undefined}
         save={(values) => action({ action: "save", kind: modal.kind, id: modal.item?.id, data: values }, "Änderungen gespeichert.", true)}
         draft={modal.item ? () => action({ action: "draft", id: modal.item?.id }, "Entwurf gespeichert.", true) : undefined} />)}
@@ -441,7 +450,7 @@ function Dialog({ title, close, children, variant, active = true }: { title: str
   }, [active, close]);
   return <div className="modal-overlay" style={active ? undefined : { display: "none" }} onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}><section className={variant === "offer" ? "modal offer-dialog" : "modal"} role="dialog" aria-modal="true" aria-label={title}><div className="card-heading"><h3>{title}</h3><button className="icon-button" onClick={close} aria-label="Schließen"><X size={21} /></button></div>{children}</section></div>;
 }
-function Editor({ kind, item, offers, sources, channelOptions, busy, ai, save, draft, remove }: { kind: Kind; item?: RecordItem; offers: RecordItem[]; sources: Connection[]; channelOptions: ChannelOption[]; busy: boolean; ai: boolean; save: (data: Record<string, FormDataEntryValue>) => void; draft?: () => void; remove?: () => void }) {
+function Editor({ kind, item, offers, sources, owners, channelOptions, busy, ai, save, draft, remove }: { kind: Kind; item?: RecordItem; offers: RecordItem[]; sources: Connection[]; owners: OwnerOption[]; channelOptions: ChannelOption[]; busy: boolean; ai: boolean; save: (data: Record<string, FormDataEntryValue>) => void; draft?: () => void; remove?: () => void }) {
   const d = item?.data;
   const [target, setTarget] = useState(d?.url ?? "");
   const [campaignName, setCampaignName] = useState(d?.title ?? "");
@@ -450,14 +459,16 @@ function Editor({ kind, item, offers, sources, channelOptions, busy, ai, save, d
   const tracking = kind === "campaign" && campaignName.trim() && URL.canParse(target) && new URL(target).protocol === "https:" ? trackingLink(target, campaignName, campaignChannel) : "";
   const options = statuses[kind] ?? [];
   return <form onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); save(Object.fromEntries(new FormData(e.currentTarget))); }}>
-    <label className="form-field">{kind === "review" ? "Absender" : kind === "brand" ? "Markenname" : kind === "profile" ? "Name im Portal" : "Titel"}<input name="title" defaultValue={d?.title ?? (kind === "brand" ? "Schlosshotel Kitzbühel" : undefined)} maxLength={120} required autoFocus onChange={kind === "campaign" ? (e) => { setCampaignName(e.target.value); setCopied(false); } : undefined} /></label>
+    {kind === "review" ? <div className="review-original"><strong>{d?.title}</strong><span> · {[d?.channel, d?.stars && number(d.stars, 2) + " von 5", d?.source === "API" ? "Live-API" : d?.source === "Dateiimport" ? "Dateiimport" : /^r[123]$/.test(item?.id ?? "") ? "Beispieldaten" : ""].filter(Boolean).join(" · ")}</span>{d?.description && <p>{d.description}</p>}</div>
+      : <label className="form-field">{kind === "brand" ? "Markenname" : kind === "profile" ? "Name im Portal" : "Titel"}<input name="title" defaultValue={d?.title ?? (kind === "brand" ? "Schlosshotel Kitzbühel" : undefined)} maxLength={120} required autoFocus onChange={kind === "campaign" ? (e) => { setCampaignName(e.target.value); setCopied(false); } : undefined} /></label>}
     <div className="fields"><label className="form-field">Status<select name="status" defaultValue={d?.status ?? options[0]}>{options.map((s) => <option key={s}>{s}</option>)}</select></label>
     {["system", "profile"].includes(kind) ? <Choice label={kind === "profile" ? "Portal" : "Quelle"} name="source" value={d?.source} required
       options={sources.filter((source) => kind === "system" || ["Bewertungen", "Social Media", "Metasuche"].includes(source.category)).map((source) => source.name)} />
-      : ["campaign", "task", "review", "agency"].includes(kind) ? <Choice label="Kanal" name="channel" value={d?.channel} onChange={kind === "campaign" ? (channel) => { setCampaignChannel(channel); setCopied(false); } : undefined}
-        options={kind === "review" ? sources.filter((source) => source.category === "Bewertungen").map((source) => source.name)
-          : channelOptions.filter((option) => option.active || option.code === d?.channel).map((option) => ({ value: option.code, label: option.label + (option.active ? "" : " (ausgeblendet)") }))} /> : null}</div>
-    {["task", "campaign", "agency", "system", "guide", "solution", "profile"].includes(kind) && <label className="form-field">Zuständig<input name="owner" defaultValue={d?.owner} /></label>}
+      : ["campaign", "task", "agency"].includes(kind) ? <Choice label="Kanal" name="channel" value={d?.channel} onChange={kind === "campaign" ? (channel) => { setCampaignChannel(channel); setCopied(false); } : undefined}
+        options={channelOptions.filter((option) => option.active || option.code === d?.channel).map((option) => ({ value: option.code, label: option.label + (option.active ? "" : " (ausgeblendet)") }))} /> : null}</div>
+    {["task", "campaign", "agency", "system", "guide", "solution", "profile"].includes(kind) && <Choice label="Zuständig" name="ownerId" value={d?.ownerId ?? (d?.owner ? "legacy" : "")}
+      options={[...owners.filter((person) => person.active || person.id === d?.ownerId).map((person) => ({ value: person.id, label: person.name + (person.active ? "" : " (inaktiv)") })),
+        ...(d?.owner && !d.ownerId ? [{ value: "legacy", label: d.owner + " (bisherige Angabe)" }] : [])]} />}
     {kind === "task" && <label className="form-field">Termin<input type="date" name="due" defaultValue={d?.due} /></label>}
     {kind === "campaign" && <div className="fields"><label className="form-field">Start<input type="date" name="start" defaultValue={d?.start} /></label><label className="form-field">Ende<input type="date" name="due" defaultValue={d?.due} /></label></div>}
     {["content", "campaign"].includes(kind) && <label className="form-field">Angebot<select name="related" defaultValue={d?.related ?? ""}><option value="">Ohne Zuordnung</option>{offers.map((o) => <option key={o.id} value={o.id}>{o.data.title}</option>)}</select></label>}
@@ -469,14 +480,13 @@ function Editor({ kind, item, offers, sources, channelOptions, busy, ai, save, d
         <label className="form-field">Briefing vor Start (Tage)<input type="number" name="briefLead" min={0} max={30} step={1} defaultValue={d?.briefLead ?? 0} required /></label></div>
       <p className="form-help">0 deaktiviert die jeweilige Regel. Budgetwarnungen laufen bei aktiven Kampagnen, Briefings bei geplanten Starts.</p>
     </fieldset>}
-    {kind === "review" && <label className="form-field">Sterne<input type="number" min="1" max="5" name="stars" defaultValue={d?.stars ?? 5} required /></label>}
     {kind === "solution" && <><MoneyField name="amount" label="Geschätzte Kosten (€)" value={d?.amount} />
       <label className="form-field">Nutzen<textarea name="benefit" rows={2} defaultValue={d?.benefit} /></label><label className="form-field">Datenschutz<textarea name="privacy" rows={2} defaultValue={d?.privacy} /></label>
       <label className="form-field">Umsetzbarkeit<textarea name="feasibility" rows={2} defaultValue={d?.feasibility} /></label><label className="form-field">Entscheidungsbegründung<textarea name="decision" rows={2} defaultValue={d?.decision} /></label></>}
     {(kind === "profile" || kind === "brand") && <div className="fields"><label className="form-field">Adresse<input name="address" defaultValue={d?.address} /></label><label className="form-field">Telefon<input name="phone" type="tel" defaultValue={d?.phone} /></label></div>}
     {kind === "profile" && <label className="form-field">Profil-URL<input name="url" type="url" defaultValue={d?.url} required /></label>}
     {kind === "brand" && <><label className="form-field">Markenstil<textarea name="tone" rows={2} defaultValue={d?.tone} /></label><Choice name="language" label="Standardsprache" value={d?.language ?? "Deutsch"} options={["Deutsch", "Englisch"]} /></>}
-    <label className="form-field">{kind === "review" ? "Bewertungstext" : kind === "content" ? "Beitragstext" : "Beschreibung"}<textarea name="description" rows={4} maxLength={2400} defaultValue={d?.description} /></label>
+    {kind !== "review" && <label className="form-field">{kind === "content" ? "Beitragstext" : "Beschreibung"}<textarea name="description" rows={4} maxLength={2400} defaultValue={d?.description} /></label>}
     {kind === "review" && <label className="form-field">Antwort<textarea name="response" rows={3} maxLength={2400} defaultValue={d?.response} /></label>}
     {(kind === "review" || kind === "content") && <p className="form-help">Prüfe vor der Freigabe Angaben, Markenstil und Datenschutz. Die Freigabe gilt in diesem Arbeitsbereich.</p>}
     <div className="inline-actions"><button type="submit" className="button primary" disabled={busy}>Speichern</button>{draft && kind === "review" && <button type="button" className="button" onClick={draft} disabled={busy}><Sparkles size={16} /> {ai ? "Antwort mit KI entwerfen" : "Antwortvorlage anwenden"}</button>}{kind === "review" && d?.status === "Freigegeben" && d.response && <button type="button" className="button" onClick={() => download("bewertungsantwort.txt", d.response!, "text/plain;charset=utf-8")}><Download size={16} /> Antwort exportieren</button>}

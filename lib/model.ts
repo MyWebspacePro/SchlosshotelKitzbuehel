@@ -17,7 +17,7 @@ export const brandImages = [
   { file: "/brand/terrasse.webp", label: "Terrasse" }, { file: "/brand/suite.webp", label: "Adlersuite" }
 ];
 export type Data = {
-  title: string; status: string; description: string; owner?: string; channel?: string;
+  title: string; status: string; description: string; owner?: string; ownerId?: string; channel?: string;
   due?: string; amount?: number; actual?: number; expected?: number; observed?: number;
   stars?: number; url?: string; response?: string; source?: string; related?: string; image?: string;
   format?: "instagram" | "newsletter"; slides?: Slide[]; newsletter?: Newsletter;
@@ -28,12 +28,15 @@ export type Data = {
   report?: ReportSnapshot;
 };
 export type RecordItem = { id: string; kind: Kind; data: Data; updated_at: string };
-export type Connection = { id: string; name: string; category: string; last_sync: string | null; last_result: string | null };
+export type ConnectionMode = "example" | "import" | "live" | "off";
+export type Connection = { id: string; name: string; category: string; last_sync: string | null; last_result: string | null;
+  mode: ConnectionMode; account: string; profile_url: string; liveAvailable: boolean };
 export type Schedule = { action: "check" | "report" | "campaign-automation"; hours: number; next_at: string; last_status: string | null };
 export type ContentRevision = { record: string; title: string; status: string; created_at: string };
 export type MediaImage = { file: string; label: string };
 export type ChannelOption = { code: string; label: string; active: boolean };
-export type Workspace = { records: RecordItem[]; metrics: Metric[]; campaignMetrics: CampaignMetric[]; revisions: ContentRevision[]; connections: Connection[]; schedules: Schedule[]; media: MediaImage[]; channelOptions: ChannelOption[]; ai: boolean };
+export type OwnerOption = { id: string; name: string; role: string; active: boolean };
+export type Workspace = { records: RecordItem[]; metrics: Metric[]; campaignMetrics: CampaignMetric[]; revisions: ContentRevision[]; connections: Connection[]; schedules: Schedule[]; media: MediaImage[]; channelOptions: ChannelOption[]; owners: OwnerOption[]; connectorTag: string; ai: boolean };
 export const channels = ["Google Ads", "Google Hotel Ads", "Organische Suche", "Metasearch", "Newsletter", "Social Media"];
 export const defaultChannelOptions = [...channels, "Website", "Instagram", "Direktvertrieb", "Content", "Controlling"];
 export const channelLabel = (code: string, options: ChannelOption[]) => options.find((option) => option.code === code)?.label ?? code;

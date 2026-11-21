@@ -31,6 +31,32 @@ let state = await requestWorkspace({ action: "save", kind: "campaign", data: {
 } });
 const campaign = state.records.find((r) => r.data.title === "Ablaufprüfung Winter");
 assert.ok(campaign);
+await requestWorkspace({ action: "save", kind: "review", data: {
+  title: "Manueller Eintrag", status: "Offen", description: "Test", stars: 4
+} }, 400);
+state = await requestWorkspace({ action: "save", kind: "review", id: "r2", data: {
+  title: "Geänderter Absender", status: "Entwurf", description: "Geänderter Originaltext", channel: "Booking.com", stars: 1, response: "Vielen Dank."
+} });
+const review = state.records.find((r) => r.id === "r2");
+assert.equal(review.data.title, "Michael R.");
+assert.equal(review.data.channel, "Google Unternehmensprofil");
+assert.equal(review.data.stars, 4);
+assert.equal(review.data.response, "Vielen Dank.");
+state = await requestWorkspace({ action: "owner-setting", name: "QA Mitarbeiterin", role: "Marketing" });
+const owner = state.owners.find((person) => person.name === "QA Mitarbeiterin");
+const taskData = { title: "Prüfung Zuständigkeit", status: "Offen", ownerId: owner.id };
+await requestWorkspace({ action: "save", kind: "task", data: { ...taskData, ownerId: "falsche-person" } }, 400);
+state = await requestWorkspace({ action: "save", kind: "task", data: taskData });
+const assigned = state.records.find((r) => r.data.title === taskData.title);
+assert.equal(assigned.data.owner, owner.name);
+state = await requestWorkspace({ action: "owner-setting", id: owner.id, name: "QA Mitarbeiterin neu", active: false });
+assert.equal(state.records.find((r) => r.id === assigned.id).data.owner, "QA Mitarbeiterin neu");
+await requestWorkspace({ action: "save", kind: "task", data: taskData }, 400);
+await requestWorkspace({ action: "save", kind: "task", id: assigned.id, data: { ...taskData, status: "Erledigt" } });
+state = await requestWorkspace({ action: "connection-setting", id: "meta", mode: "import", account: "1234", profileUrl: "https://www.instagram.com/example/" });
+assert.equal(state.connections.find((entry) => entry.id === "meta").account, "1234");
+await requestWorkspace({ action: "sync", id: "meta" }, 400);
+await requestWorkspace({ action: "connection-setting", id: "booking", mode: "live", account: "1234" }, 400);
 const metrics = { day: "2026-11-20", channel: "Instagram", visits: 200, starts: 40, bookings: 10, revenue: 1500, cost: 60 };
 await requestWorkspace({ action: "import", rows: [{ ...metrics, bookings: 400 }], campaign: campaign.id }, 400);
 await requestWorkspace({ action: "import", rows: [metrics], campaign: campaign.id });

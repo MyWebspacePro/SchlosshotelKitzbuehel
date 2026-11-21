@@ -17,11 +17,21 @@ Jeder Browser startet ohne Anmeldung mit einem eigenen synthetischen Datenbestan
 - Im **Content-Studio** mit **Instagram-Carousel** einen Beitrag anlegen. Eigene Bilder zur Mediathek hochladen und dem ausgewählten Slide per Thumbnail ein Motiv zuweisen. Den Bildausschnitt direkt in der Vorschau verschieben oder mit den Reglern unter **Bild gestalten** einstellen. Einzelne PNGs oder alle Slides mit Caption als ZIP herunterladen.
 - Mit **Newsletter** den separaten E-Mail-Editor öffnen. Betreff, Vorschautext, Titelbild, Text und Link bearbeiten. Das HTML-Paket enthält Entwurf, Betreff, Vorschautext und gegebenenfalls das Titelbild. Der Newsletter-Dienst kann das Bild beim Einrichten des Versands als Kampagnenmedium einbinden.
 - Unter **Datenquellen** CSV- oder Excel-Dateien für Kennzahlen, Angebote, Bewertungen und Agenturbudgets importieren. Jeder Dateityp bietet eine Vorlage und eine Vorschau. Dort lassen sich auch Zeitpläne, technische Vorgänge, Schulungsunterlagen und Bewertungen digitaler Lösungen verwalten. Der erste geplante Lauf startet zeitnah. Weitere Läufe folgen dem gewählten Intervall.
-- Unter **Datenquellen → Kanäle verwalten** Kanäle hinzufügen, umbenennen und ein- oder ausblenden. Bestehende Zuordnungen verwenden die interne Kanalreferenz weiterhin. Die Importdatei akzeptiert den aktuellen Namen oder die ursprüngliche Referenz.
-- Unter **Bewertungen** Antworten zur Freigabe vorbereiten und Portalprofile mit den zentralen Markenangaben abgleichen.
+- Unter **Einstellungen** Personen anlegen, umbenennen und deaktivieren sowie Kanäle und Verbindungen pflegen. Die Auswahl **Zuständig** übernimmt aktive Personen. Bestehende Aufgaben behalten ihre Zuordnung, wenn eine Person deaktiviert wird. Die Importdatei akzeptiert den aktuellen Kanalnamen oder seine ursprüngliche Referenz.
+- Unter **Bewertungen** Google- und Booking.com-Bewertungen abrufen oder per Datei importieren. Der Originaltext, die Sterne und der Absender werden aus der Quelle übernommen. Im Cockpit lassen sich die Antworten vorbereiten, freigeben und exportieren.
 - Unter **Berichte** Kennzahlen, Kampagnenkosten, freigegebene Inhalte und Maßnahmen für einen Zeitraum zusammenführen. **Druckansicht** öffnet den fertig gesetzten A4-Bericht. **PDF herunterladen** speichert dieselbe Druckfassung als Datei.
 
 Mit `OPENAI_API_KEY` und `OPENAI_MODEL` steht textgenerierende KI zur Verfügung. Ohne Konfiguration erzeugen die als Textvorlagen gekennzeichneten Funktionen lokale Entwürfe. Für einen öffentlich zugänglichen Betrieb empfiehlt sich, den Modellschnittstellenzugang am Reverse Proxy zu begrenzen und ausschließlich synthetische oder geeignete aggregierte Daten zu verwenden.
+
+### Plattformzugänge
+
+Unter **Einstellungen → Verbindungen** werden Referenz, Profiladresse und die Art der Datenübernahme gespeichert. Der Arbeitsbereichscode unter **API-Freigabe** gehört serverseitig in `CONNECTOR_WORKSPACE_TAG`. Nur der zugeordnete Arbeitsbereich kann die Serverzugänge verwenden.
+
+- Google benötigt einen Business-Profile-OAuth-Client mit `business.manage` und einen Refresh-Token für den verifizierten Standort. Im Cockpit wird `accounts/<Konto-ID>/locations/<Standort-ID>` eingetragen.
+- Booking.com benötigt einen Connectivity-Maschinenzugang mit Zugriff auf `review-api` und die vom Hotel freigegebene Unterkunft. Im Cockpit wird die numerische Unterkunfts-ID eingetragen.
+- Instagram benötigt einen User-Token für die Instagram API mit Instagram Login und `instagram_business_basic` für ein Profikonto. `INSTAGRAM_API_VERSION` bestimmt die für die Meta-App verwendete API-Version. Die Verbindung prüft das Konto und liest Profilinformationen. Beiträge werden aus dem Content-Studio exportiert.
+
+Die Variablen stehen in `.env.example`. Nach dem Hinterlegen der Serverzugänge die App neu starten, unter der jeweiligen Verbindung **Live-API** speichern und den Abruf unter **Datenquellen** starten.
 
 ## Produktionsbereitstellung
 
