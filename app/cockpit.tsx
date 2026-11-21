@@ -18,7 +18,7 @@ import { reportTitle, type ReportKind } from "../lib/report";
 import MetricImport from "./metric-import";
 import type { Dataset } from "../lib/import-fields";
 import { websitePages } from "../lib/website";
-import { availabilityLabel, campaignRowsFor, channelLabel, euro, number, offerComparison, pct, priceEuro, sum, type ChannelOption, type Connection, type Kind, type MediaImage, type Metric, type OwnerOption, type RecordItem, type Workspace } from "../lib/model";
+import { agencyChannels, availabilityLabel, campaignRowsFor, channelLabel, euro, number, offerComparison, pct, priceEuro, sum, type ChannelOption, type Connection, type Kind, type MediaImage, type Metric, type OwnerOption, type RecordItem, type Workspace } from "../lib/model";
 
 const nav = [
   { id: "home", label: "Übersicht", icon: LayoutGrid },
@@ -192,6 +192,7 @@ export default function Cockpit() {
   const activeItem = draftFormat ? undefined : visibleRecords.find((r) => r.id === selected) ?? visibleRecords[0];
   const campaignBeingEdited = modal?.type === "edit" && modal.kind === "campaign" ? modal.item : undefined;
   const offerBeingEdited = modal?.type === "edit" && modal.kind === "offer";
+  const editorLabel = offerBeingEdited ? "Angebot" : modal?.type === "edit" && modal.kind === "agency" ? "Agentur" : "Eintrag";
   const deleteLabel = pendingDelete ? deleteLabels[pendingDelete.kind] : undefined;
   const area = nav.find((n) => n.id === page)!;
 
@@ -247,7 +248,8 @@ export default function Cockpit() {
             : page === "report" ? <button className="button primary" onClick={() => open({ type: "report" })}><Plus size={17} /> Bericht erstellen</button>
             : page === "content" ? <><button className="button" disabled={!data} onClick={() => setDraftFormat("newsletter")}><Plus size={17} /> Newsletter</button><button className="button primary" disabled={!data} onClick={() => setDraftFormat("instagram")}><Plus size={17} /> Instagram-Carousel</button></>
             : page === "offer" ? <><button className="button" onClick={() => open({ type: "import", dataset: "offers" })}>Angebote importieren</button><button className="button" onClick={() => open({ type: "edit", kind: "offer" })}><Plus size={17} /> Angebot</button><button className="button primary" disabled={busy || !offers.length} onClick={() => action({ action: "check" }, "Angebotsprüfung abgeschlossen.")}><Activity size={17} /> Prüfung starten</button></>
-            : <button className="button primary" onClick={() => open({ type: "edit", kind: page })}><Plus size={17} /> {({ campaign: "Kampagne", task: "Aufgabe", agency: "Agentur" })[page]} anlegen</button>}
+            : page === "agency" ? <><button className="button" onClick={() => open({ type: "import", dataset: "agency" })}>Budgets importieren</button><button className="button primary" onClick={() => open({ type: "edit", kind: "agency" })}><Plus size={17} /> Agentur anlegen</button></>
+            : <button className="button primary" onClick={() => open({ type: "edit", kind: page })}><Plus size={17} /> {page === "campaign" ? "Kampagne" : "Aufgabe"} anlegen</button>}
           </div></div>
           {page === "settings" ? (data && <WorkspaceSettings data={data} busy={busy} save={async (payload, message) => Boolean(await action(payload, message))} />)
           : page === "connections" ? <>
@@ -356,7 +358,7 @@ export default function Cockpit() {
       </main>
     </div>
     {modal && <Dialog close={closeModal} active={!pendingDelete} variant={offerBeingEdited ? "offer" : undefined}
-      title={modal.type === "edit" ? (offerBeingEdited ? (modal.item ? "Angebot bearbeiten" : "Angebot anlegen") : modal.item ? "Eintrag bearbeiten" : "Neuer Eintrag") : modal.type === "import" ? "Daten importieren" : modal.type === "search" ? "Arbeitsbereich durchsuchen" : "Bericht erstellen"}>
+      title={modal.type === "edit" ? (modal.item ? editorLabel + " bearbeiten" : editorLabel === "Eintrag" ? "Neuer Eintrag" : editorLabel + " anlegen") : modal.type === "import" ? "Daten importieren" : modal.type === "search" ? "Arbeitsbereich durchsuchen" : "Bericht erstellen"}>
       {problem && <div className="notice error" role="alert">{problem}</div>}
       {campaignBeingEdited && <div className="inline-actions campaign-management">
         {campaignBeingEdited.data.status === "Aktiv" && <button className="button" disabled={busy} onClick={() => action({ action: "campaign-status", id: campaignBeingEdited.id, status: "Pausiert" }, "Kampagne pausiert.", true)}>Kampagne pausieren</button>}
@@ -382,7 +384,7 @@ export default function Cockpit() {
       }} />}
       {modal.type === "search" && <>
         <label className="form-field">Suchbegriff<input placeholder="Angebot, Kampagne, Aufgabe …" value={query} onChange={(e) => setQuery(e.target.value)} autoFocus /></label>
-        {query.trim() && records.filter((r) => r.kind !== "check" && r.kind !== "sitecheck" && r.kind !== "automation" && r.kind !== "import" && (r.data.title + " " + r.data.description).toLocaleLowerCase().includes(query.toLocaleLowerCase().trim())).slice(0, 12).map((r) => <RecordRow key={r.id} item={r} onClick={() => {
+        {query.trim() && records.filter((r) => r.kind !== "check" && r.kind !== "sitecheck" && r.kind !== "automation" && r.kind !== "import" && (r.data.title + " " + r.data.description).toLocaleLowerCase().includes(query.toLocaleLowerCase().trim())).slice(0, 12).map((r) => <RecordRow key={r.id} item={r} channelOptions={channelOptions} onClick={() => {
           move(["system", "guide", "solution"].includes(r.kind) ? "connections" : ["brand", "profile"].includes(r.kind) ? "review" : r.kind as Page);
           if (r.kind === "content" || r.kind === "report") setSelected(r.id);
           setModal(r.kind === "report" || r.kind === "content" ? undefined : { type: "edit", kind: r.kind, item: r });
@@ -420,7 +422,8 @@ function ChannelTable({ metrics, channelOptions }: { metrics: Metric[]; channelO
 function RecordRow({ item, onClick, current, channelOptions = [] }: { item: RecordItem; onClick: () => void; current?: boolean; channelOptions?: ChannelOption[] }) {
   const d = item.data;
   const detail = [
-    d.channel ? channelLabel(d.channel, channelOptions) : d.source || d.owner,
+    item.kind === "agency" ? agencyChannels(d).map((code) => channelLabel(code, channelOptions)).join(", ") || d.owner :
+      d.channel ? channelLabel(d.channel, channelOptions) : d.source || d.owner,
     d.due && short(d.due),
     d.amount !== undefined && "Budget " + euro(d.amount),
     d.actual !== undefined && "Ist " + euro(d.actual),
@@ -454,22 +457,41 @@ function Dialog({ title, close, children, variant, active = true }: { title: str
   }, [active, close]);
   return <div className="modal-overlay" style={active ? undefined : { display: "none" }} onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}><section className={variant === "offer" ? "modal offer-dialog" : "modal"} role="dialog" aria-modal="true" aria-label={title}><div className="card-heading"><h3>{title}</h3><button className="icon-button" onClick={close} aria-label="Schließen"><X size={21} /></button></div>{children}</section></div>;
 }
-function Editor({ kind, item, offers, sources, owners, channelOptions, busy, ai, save, draft, remove }: { kind: Kind; item?: RecordItem; offers: RecordItem[]; sources: Connection[]; owners: OwnerOption[]; channelOptions: ChannelOption[]; busy: boolean; ai: boolean; save: (data: Record<string, FormDataEntryValue>) => void; draft?: () => void; remove?: () => void }) {
+function Editor({ kind, item, offers, sources, owners, channelOptions, busy, ai, save, draft, remove }: { kind: Kind; item?: RecordItem; offers: RecordItem[]; sources: Connection[]; owners: OwnerOption[]; channelOptions: ChannelOption[]; busy: boolean; ai: boolean; save: (data: Record<string, FormDataEntryValue | string[]>) => void; draft?: () => void; remove?: () => void }) {
   const d = item?.data;
   const [target, setTarget] = useState(d?.url ?? "");
   const [campaignName, setCampaignName] = useState(d?.title ?? "");
   const [campaignChannel, setCampaignChannel] = useState(d?.channel ?? "");
+  const [selectedChannels, setSelectedChannels] = useState(() => kind === "agency" ? agencyChannels(d) : []);
   const [copied, setCopied] = useState(false);
   const tracking = kind === "campaign" && campaignName.trim() && URL.canParse(target) && new URL(target).protocol === "https:" ? trackingLink(target, campaignName, campaignChannel) : "";
   const options = statuses[kind] ?? [];
-  return <form onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); save(Object.fromEntries(new FormData(e.currentTarget))); }}>
+  return <form onSubmit={(e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fields = Object.fromEntries(new FormData(e.currentTarget));
+    save(kind === "agency" ? { ...fields, channels: selectedChannels } : fields);
+  }}>
     {kind === "review" ? <div className="review-original"><strong>{d?.title}</strong><span> · {[d?.channel, d?.stars && number(d.stars, 2) + " von 5", d?.source === "API" ? "Live-API" : d?.source === "Dateiimport" ? "Dateiimport" : /^r[123]$/.test(item?.id ?? "") ? "Beispieldaten" : ""].filter(Boolean).join(" · ")}</span>{d?.description && <p>{d.description}</p>}</div>
-      : <label className="form-field">{kind === "brand" ? "Markenname" : kind === "profile" ? "Name im Portal" : "Titel"}<input name="title" defaultValue={d?.title ?? (kind === "brand" ? "Schlosshotel Kitzbühel" : undefined)} maxLength={120} required autoFocus onChange={kind === "campaign" ? (e) => { setCampaignName(e.target.value); setCopied(false); } : undefined} /></label>}
+      : <label className="form-field">{kind === "brand" ? "Markenname" : kind === "profile" ? "Name im Portal" : kind === "agency" ? "Name der Agentur" : "Titel"}<input name="title" defaultValue={d?.title ?? (kind === "brand" ? "Schlosshotel Kitzbühel" : undefined)} maxLength={120} required autoFocus onChange={kind === "campaign" ? (e) => { setCampaignName(e.target.value); setCopied(false); } : undefined} /></label>}
     <div className="fields"><label className="form-field">Status<select name="status" defaultValue={d?.status ?? options[0]}>{options.map((s) => <option key={s}>{s}</option>)}</select></label>
     {["system", "profile"].includes(kind) ? <Choice label={kind === "profile" ? "Portal" : "Quelle"} name="source" value={d?.source} required
       options={sources.filter((source) => kind === "system" || ["Bewertungen", "Social Media", "Metasuche"].includes(source.category)).map((source) => source.name)} />
-      : ["campaign", "task", "agency"].includes(kind) ? <Choice label="Kanal" name="channel" value={d?.channel} onChange={kind === "campaign" ? (channel) => { setCampaignChannel(channel); setCopied(false); } : undefined}
+      : ["campaign", "task"].includes(kind) ? <Choice label="Kanal" name="channel" value={d?.channel} onChange={kind === "campaign" ? (channel) => { setCampaignChannel(channel); setCopied(false); } : undefined}
         options={channelOptions.filter((option) => option.active || option.code === d?.channel).map((option) => ({ value: option.code, label: option.label + (option.active ? "" : " (ausgeblendet)") }))} /> : null}</div>
+    {kind === "agency" && <fieldset className="agency-channels"><legend>Kanäle</legend>
+      {selectedChannels.length > 0 && <ul aria-label="Zugeordnete Kanäle">{selectedChannels.map((code) => {
+        const label = channelLabel(code, channelOptions);
+        const inactive = channelOptions.some((option) => option.code === code && !option.active);
+        return <li key={code}><span>{label}{inactive && " (ausgeblendet)"}</span><button type="button" aria-label={label + " entfernen"} onClick={() => setSelectedChannels((current) => current.filter((value) => value !== code))}><X size={14} /></button></li>;
+      })}</ul>}
+      <label className="form-field">Kanal hinzufügen<select value="" onChange={(event) => {
+        const code = event.target.value;
+        if (code) setSelectedChannels((current) => [...current, code]);
+      }}>
+        <option value="">Kanal auswählen</option>
+        {channelOptions.filter((option) => option.active && !selectedChannels.includes(option.code)).map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}
+      </select></label>
+    </fieldset>}
     {["task", "campaign", "agency", "system", "guide", "solution", "profile"].includes(kind) && <Choice label="Zuständig" name="ownerId" value={d?.ownerId ?? (d?.owner ? "legacy" : "")}
       options={[...owners.filter((person) => person.active || person.id === d?.ownerId).map((person) => ({ value: person.id, label: person.name + (person.active ? "" : " (inaktiv)") })),
         ...(d?.owner && !d.ownerId ? [{ value: "legacy", label: d.owner + " (bisherige Angabe)" }] : [])]} />}
@@ -490,7 +512,7 @@ function Editor({ kind, item, offers, sources, owners, channelOptions, busy, ai,
     {(kind === "profile" || kind === "brand") && <div className="fields"><label className="form-field">Adresse<input name="address" defaultValue={d?.address} /></label><label className="form-field">Telefon<input name="phone" type="tel" defaultValue={d?.phone} /></label></div>}
     {kind === "profile" && <label className="form-field">Profil-URL<input name="url" type="url" defaultValue={d?.url} required /></label>}
     {kind === "brand" && <><label className="form-field">Markenstil<textarea name="tone" rows={2} defaultValue={d?.tone} /></label><Choice name="language" label="Standardsprache" value={d?.language ?? "Deutsch"} options={["Deutsch", "Englisch"]} /></>}
-    {kind !== "review" && <label className="form-field">{kind === "content" ? "Beitragstext" : "Beschreibung"}<textarea name="description" rows={4} maxLength={2400} defaultValue={d?.description} /></label>}
+    {kind !== "review" && <label className="form-field">{kind === "content" ? "Beitragstext" : kind === "agency" ? "Leistungen" : "Beschreibung"}<textarea name="description" rows={4} maxLength={2400} defaultValue={d?.description} /></label>}
     {kind === "review" && <label className="form-field">Antwort<textarea name="response" rows={3} maxLength={2400} defaultValue={d?.response} /></label>}
     {(kind === "review" || kind === "content") && <p className="form-help">Prüfe vor der Freigabe Angaben, Markenstil und Datenschutz. Die Freigabe gilt in diesem Arbeitsbereich.</p>}
     <div className="inline-actions"><button type="submit" className="button primary" disabled={busy}>Speichern</button>{draft && kind === "review" && <button type="button" className="button" onClick={draft} disabled={busy}><Sparkles size={16} /> {ai ? "Antwort mit KI entwerfen" : "Antwortvorlage anwenden"}</button>}{kind === "review" && d?.status === "Freigegeben" && d.response && <button type="button" className="button" onClick={() => download("bewertungsantwort.txt", d.response!, "text/plain;charset=utf-8")}><Download size={16} /> Antwort exportieren</button>}

@@ -38,7 +38,9 @@ async function readRows(file: File, dataset: Dataset): Promise<ImportRow[]> {
         row.map((cell) => cell instanceof Date ? cell.toISOString().slice(0, 10) : String(cell ?? "")))
     : csvCells(await file.text());
   const header = cells.shift()?.map((value) => value.toLowerCase().trim()) ?? [];
-  const indexes = fields.map((field, i) => header.findIndex((name) => name === field.toLowerCase() || name === titles[i].toLowerCase() || (field === "starts" && name === "starts")));
+  const indexes = fields.map((field, i) => header.findIndex((name) => name === field.toLowerCase() || name === titles[i].toLowerCase() ||
+    (dataset === "agency" && field === "channel" && (name === "kanal" || name === "channels")) ||
+    (dataset === "agency" && field === "title" && name === "leistung")));
   if (indexes.includes(-1)) throw new Error("Die Datei benötigt diese Spalten · " + titles.join(", "));
   const rows = cells.filter((line) => line.some(Boolean));
   if (!rows.length || rows.length > 3000) throw new Error("Die Datei muss zwischen 1 und 3.000 Datenzeilen enthalten.");
@@ -50,7 +52,7 @@ async function readRows(file: File, dataset: Dataset): Promise<ImportRow[]> {
       row[key] = value.includes(",") ? value.replaceAll(".", "").replace(",", ".") : value;
       if (!/^\d+(\.\d+)?$/.test(row[key]) || !Number.isFinite(Number(row[key]))) throw new Error("Zeile " + (i + 2) + " hat eine ungültige Zahl in " + titles[fields.indexOf(key)] + ".");
     }
-    const key = dataset === "metrics" ? row.day + "|" + row.channel : (row.source ?? row.channel ?? "") + "|" + row.id;
+    const key = dataset === "metrics" ? row.day + "|" + row.channel : dataset === "agency" ? row.id : (row.source ?? row.channel ?? "") + "|" + row.id;
     if (dataset === "metrics") {
       const day = new Date(row.day + "T00:00:00Z");
       if (!row.channel || !/^\d{4}-\d{2}-\d{2}$/.test(row.day) || Number.isNaN(day.getTime()) || day.toISOString().slice(0, 10) !== row.day) throw new Error("Zeile " + (i + 2) + " benötigt einen Kanal und ein gültiges Datum (JJJJ-MM-TT).");
@@ -80,6 +82,7 @@ export default function MetricImport({ campaigns, channelOptions, initialCampaig
   const { fields, titles, example } = importFields[dataset];
   return <form onSubmit={(e) => { e.preventDefault(); if (rows.length && !mismatch) submit(rows, dataset === "metrics" ? campaign : "", dataset, filename); }}>
     <p className="form-help">CSV oder XLSX. Die Vorschau prüft die Datei vor dem Speichern. Beim erneuten Import werden übereinstimmende Datensätze aktualisiert.</p>
+    {dataset === "agency" && <p className="form-help">Eine Zeile pro Agentur. Mehrere Kanäle in derselben Zelle mit | trennen, etwa Google Ads | Newsletter.</p>}
     {!initialCampaign && <label className="form-field">Dateiart<select aria-label="Dateiart" value={dataset} onChange={(e) => { sequence.current++; setDataset(e.target.value as Dataset); setRows([]); setError(""); setReading(false); }}>
       {Object.entries(importFields).map(([id, spec]) => <option key={id} value={id}>{spec.label}</option>)}
     </select></label>}

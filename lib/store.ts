@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { Pool, type QueryResultRow } from "pg";
-import { availabilityLabel, brandImages, campaignRowsFor, channelCode, channels, defaultChannelOptions, offerComparison, priceEuro, sum, euro, type CampaignMetric, type ChannelOption, type ContentRevision, type Connection, type Data, type Kind, type MediaImage, type Metric, type OwnerOption, type RecordItem, type Schedule, type SlideCrop, type Workspace } from "./model";
+import { agencyChannels, availabilityLabel, brandImages, campaignRowsFor, channelCode, channels, defaultChannelOptions, offerComparison, priceEuro, sum, euro, type CampaignMetric, type ChannelOption, type ContentRevision, type Connection, type Data, type Kind, type MediaImage, type Metric, type OwnerOption, type RecordItem, type Schedule, type SlideCrop, type Workspace } from "./model";
 import { connectors, examples, feed } from "./seed";
 import { checkWebsite } from "./website-check";
 import { createReportSnapshot, reportDescription, reportKinds, type ReportKind } from "./report";
@@ -352,8 +352,24 @@ function available(value: unknown) {
   throw new InputError("Für Verfügbarkeit bitte Ja oder Nein verwenden.");
 }
 
+function agencyChannelCodes(values: unknown, options: ChannelOption[]) {
+  if (!Array.isArray(values)) throw new InputError("Die Kanäle müssen als Liste angegeben werden.");
+  const codes = values.map((value) => {
+    const code = channelCode(text(value, "Kanal", 100), options);
+    if (!code) throw new InputError("Ein Kanalname fehlt.");
+    return code;
+  });
+  return [...new Set(codes)];
+}
+
+const importRecordId = (...parts: string[]) => "import-" + createHash("sha256").update(JSON.stringify(parts)).digest("hex");
+
 async function importRecords(query: Query, workspace: string, dataset: Exclude<Dataset, "metrics">, rows: unknown[], state: Workspace) {
   const kind = ({ offers: "offer", reviews: "review", agency: "agency" } as const)[dataset];
+  const records = state.records.filter((entry) => entry.kind === kind);
+  const byId = new Map(records.map((entry) => [entry.id, entry]));
+  const legacyOrigins = dataset === "agency" ? [...new Set(["", ...state.channelOptions.flatMap(({ code, label }) => [code, label]),
+    ...records.flatMap((entry) => entry.data.channel ? [entry.data.channel] : [])])] : [];
   const seen = new Set<string>();
   const prepared = rows.map((value, index) => {
     if (!value || typeof value !== "object") throw new InputError("Ungültige Zeile " + (index + 2) + ".");
@@ -362,12 +378,26 @@ async function importRecords(query: Query, workspace: string, dataset: Exclude<D
       const reference = text(row.id, "Referenz", 100);
       const title = text(row.title, "Titel", 120);
       if (!reference || !title) throw new InputError("Referenz und Titel sind Pflichtfelder.");
-      const origin = text(row.source ?? row.channel ?? "", "Quelle", 100);
-      const record = state.records.find((entry) => entry.id === reference && entry.kind === kind);
-      const id = record?.id ?? "import-" + createHash("sha256").update(JSON.stringify([dataset, origin, reference])).digest("hex");
-      if (seen.has(id)) throw new InputError("Diese Referenz erscheint mehrfach.");
+      const origin = text(row.source ?? row.channel ?? "", dataset === "agency" ? "Kanäle" : "Quelle", dataset === "agency" ? 8000 : 100);
+      let existing = byId.get(reference);
+      const derivedId = dataset === "agency" ? importRecordId(dataset, reference) : importRecordId(dataset, origin, reference);
+      existing ??= byId.get(derivedId);
+      if (!existing && dataset === "agency") {
+        existing = records.find((entry) => entry.data.importReference === reference);
+        if (!existing) {
+          // Older agency imports included the channel in their identifier.
+          const matches = [...new Set([origin, ...legacyOrigins])].flatMap((previousOrigin) => {
+            const match = byId.get(importRecordId(dataset, previousOrigin, reference));
+            return match && !match.data.importReference ? [match] : [];
+          });
+          if (matches.length > 1) throw new InputError("Mehrere bestehende Agentureinträge verwenden diese Referenz. Verwende eine eindeutige Referenz pro Agentur.");
+          existing = matches[0];
+        }
+      }
+      const id = existing?.id ?? derivedId;
+      if (seen.has(id) || dataset === "agency" && seen.has("ref:" + reference)) throw new InputError("Diese Referenz erscheint mehrfach.");
       seen.add(id);
-      const existing = record ?? state.records.find((entry) => entry.id === id);
+      if (dataset === "agency") seen.add("ref:" + reference);
       const base = existing?.data;
       const data: Data = { ...base, title, description: base?.description ?? "", status: base?.status ?? "Offen" };
       if (dataset === "offers") {
@@ -390,7 +420,12 @@ async function importRecords(query: Query, workspace: string, dataset: Exclude<D
         if (data.stars < 1 || data.stars > 5 || !data.description) throw new InputError("Bewertungstext und 1 bis 5 Sterne sind erforderlich.");
         if (base && (base.description !== data.description || base.stars !== data.stars)) data.status = base.response ? "Entwurf" : "Offen";
       } else {
-        data.channel = channelCode(origin, state.channelOptions);
+        const singleCode = channelCode(origin, state.channelOptions);
+        const exact = state.channelOptions.some((option) => option.code === singleCode);
+        const values = row.channels !== undefined ? row.channels : exact ? [origin] : origin.split("|").map((part) => part.trim()).filter(Boolean);
+        data.channels = agencyChannelCodes(values, state.channelOptions);
+        delete data.channel;
+        data.importReference = base?.importReference ?? (reference === existing?.id ? undefined : reference);
         data.owner = text(row.owner, "Zuständigkeit", 120);
         data.amount = amount(row.amount, "Soll-Kosten");
         data.actual = amount(row.actual, "Ist-Kosten");
@@ -528,7 +563,18 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
       if (data.owner && !person) throw new InputError("Wähle eine Person aus den Einstellungen.");
       data.ownerId = person?.id;
     }
-    if (["campaign", "task", "agency"].includes(kind) && data.channel && data.channel !== item?.data.channel) {
+    if (kind === "agency") {
+      const previous = agencyChannels(item?.data);
+      const submitted = data.channel ? [data.channel] : [];
+      const values = raw.channels !== undefined ? raw.channels : raw.channel === undefined ? previous :
+        item?.data.channels ? [...previous, ...submitted] : submitted;
+      const next = agencyChannelCodes(values, state.channelOptions);
+      if (next.some((code) => !previous.includes(code) && !state.channelOptions.some((option) => option.active && option.code === code))) {
+        throw new InputError("Wähle aktive Kanäle aus der Liste.");
+      }
+      data.channels = next;
+      delete data.channel;
+    } else if (["campaign", "task"].includes(kind) && data.channel && data.channel !== item?.data.channel) {
       data.channel = channelCode(data.channel, state.channelOptions);
       if (!state.channelOptions.some((option) => option.active && option.code === data.channel)) throw new InputError("Wähle einen aktiven Kanal aus der Liste.");
     }

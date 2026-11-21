@@ -20,8 +20,8 @@ export const importFields = {
   agency: {
     label: "Agenturleistungen und Budgets",
     fields: ["id", "title", "channel", "owner", "amount", "actual", "description"],
-    titles: ["Referenz", "Leistung", "Kanal", "Zuständig", "Soll", "Ist", "Beschreibung"],
-    example: ["a1", "Performance Marketing", "Google Ads", "Agenturteam", "4800", "3670", "Kampagnensteuerung und Auswertung"]
+    titles: ["Referenz", "Agentur", "Kanäle", "Zuständig", "Soll", "Ist", "Beschreibung"],
+    example: ["a1", "Performance Marketing", "Google Ads | Google Hotel Ads", "Agenturteam", "4800", "3670", "Kampagnensteuerung und Auswertung"]
   }
 } as const;
 

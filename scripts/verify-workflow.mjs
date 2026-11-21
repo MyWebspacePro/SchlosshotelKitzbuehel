@@ -95,6 +95,32 @@ assert.equal(storedReport(state, "Gästebewertungen").reviews.total.draft, 1);
 assert.equal(storedReport(state, "Gästebewertungen").from, "");
 state = await requestWorkspace({ action: "report", kind: "agencies" });
 assert.ok(storedReport(state, "Agenturbudgets").agencies.some((row) => row.name === "Performance Marketing" && row.budget === 4800));
+const legacyAgency = state.records.find((row) => row.id === "a1");
+assert.equal(legacyAgency.data.channel, "Google Ads");
+const agencyData = { title: legacyAgency.data.title, status: legacyAgency.data.status, description: legacyAgency.data.description };
+state = await requestWorkspace({ action: "save", kind: "agency", id: legacyAgency.id, data: {
+  ...agencyData, channels: ["Google Ads", "Newsletter", "Newsletter"]
+} });
+const updatedAgency = state.records.find((row) => row.id === legacyAgency.id).data;
+assert.deepEqual(updatedAgency.channels, ["Google Ads", "Newsletter"]);
+assert.equal(updatedAgency.channel, undefined);
+assert.equal(updatedAgency.amount, legacyAgency.data.amount);
+assert.equal(updatedAgency.actual, legacyAgency.data.actual);
+await requestWorkspace({ action: "save", kind: "agency", id: legacyAgency.id, data: { ...agencyData, channels: ["Unbekannter Kanal"] } }, 400);
+await requestWorkspace({ action: "channel-setting", code: "Newsletter", active: false });
+await requestWorkspace({ action: "save", kind: "agency", data: { ...agencyData, title: "Neue Agentur", channels: ["Newsletter"] } }, 400);
+state = await requestWorkspace({ action: "save", kind: "agency", id: legacyAgency.id, data: { ...agencyData, channels: updatedAgency.channels } });
+assert.deepEqual(state.records.find((row) => row.id === legacyAgency.id).data.channels, updatedAgency.channels);
+await requestWorkspace({ action: "channel-setting", code: "Newsletter", active: true });
+state = await requestWorkspace({ action: "report", kind: "agencies", title: "Budgetprüfung mit mehreren Kanälen" });
+assert.deepEqual(storedReport(state, "Budgetprüfung mit mehreren Kanälen").agencies, storedReport(state, "Agenturbudgets").agencies);
+
+const agencyImport = { id: "ag-pruefung", title: "Agentur aus Datei", owner: "Marketing", description: "Test", amount: "1400", actual: "620" };
+state = await requestWorkspace({ action: "import", dataset: "agency", rows: [{ ...agencyImport, channel: "Google Ads | Newsletter" }] });
+const agencyImportId = state.records.find((row) => row.data.title === agencyImport.title).id;
+state = await requestWorkspace({ action: "import", dataset: "agency", rows: [{ ...agencyImport, channel: "Website | Instagram" }] });
+assert.deepEqual(state.records.filter((row) => row.data.title === agencyImport.title).map((row) => [row.id, row.data.channels]), [[agencyImportId, ["Website", "Instagram"]]]);
+await requestWorkspace({ action: "import", dataset: "agency", rows: [{ ...agencyImport, channel: "Website" }, { ...agencyImport, channel: "Instagram" }] }, 400);
 await requestWorkspace({ action: "report", kind: "falsch" }, 400);
 await requestWorkspace({ action: "report", kind: "website", from: "2026-11-20", to: "2026-11-19" }, 400);
 await requestWorkspace({ action: "save", kind: "campaign", id: campaign.id, data: {

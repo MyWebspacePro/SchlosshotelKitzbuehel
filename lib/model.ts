@@ -18,6 +18,7 @@ export const brandImages = [
 ];
 export type Data = {
   title: string; status: string; description: string; owner?: string; ownerId?: string; channel?: string;
+  channels?: string[]; importReference?: string;
   due?: string; amount?: number; actual?: number; expected?: number; observed?: number;
   stars?: number; url?: string; response?: string; source?: string; related?: string; image?: string;
   format?: "instagram" | "newsletter"; slides?: Slide[]; newsletter?: Newsletter;
@@ -40,6 +41,9 @@ export type Workspace = { records: RecordItem[]; metrics: Metric[]; campaignMetr
 export const channels = ["Google Ads", "Google Hotel Ads", "Organische Suche", "Metasearch", "Newsletter", "Social Media"];
 export const defaultChannelOptions = [...channels, "Website", "Instagram", "Direktvertrieb", "Content", "Controlling"];
 export const channelLabel = (code: string, options: ChannelOption[]) => options.find((option) => option.code === code)?.label ?? code;
+export function agencyChannels(data?: Data) {
+  return data?.channels ?? (data?.channel ? [data.channel] : []);
+}
 export function channelCode(name: string, options: ChannelOption[]) {
   const lower = name.trim().toLowerCase();
   return options.find((option) => option.code.toLowerCase() === lower || option.label.toLowerCase() === lower)?.code ?? name.trim();
