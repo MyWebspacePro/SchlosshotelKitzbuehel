@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { Pool, type QueryResultRow } from "pg";
-import { agencyChannels, availabilityLabel, brandImages, campaignRowsFor, channelCode, channels, defaultChannelOptions, offerComparison, priceEuro, sum, euro, type CampaignMetric, type ChannelOption, type ContentRevision, type Connection, type Data, type Kind, type MediaImage, type Metric, type OwnerOption, type RecordItem, type Schedule, type SlideCrop, type Workspace } from "./model";
+import { agencyChannels, availabilityLabel, brandImages, campaignRowsFor, channelCode, channels, defaultChannelOptions, latestOfferChecks, offerComparison, priceEuro, sum, euro, type CampaignMetric, type ChannelOption, type ContentRevision, type Connection, type Data, type Kind, type MediaImage, type Metric, type OwnerOption, type RecordItem, type Schedule, type SlideCrop, type Workspace } from "./model";
 import { connectors, examples, feed } from "./seed";
 import { checkWebsite } from "./website-check";
 import { createReportSnapshot, reportDescription, reportKinds, type ReportKind } from "./report";
@@ -220,7 +220,7 @@ async function prepareWorkspace(query: Query, id: string) {
 
 async function readWorkspace(query: Query, id: string): Promise<Workspace> {
   const [records, metrics, campaignMetrics, revisions, connections, schedules, media, channelOptions, owners] = await Promise.all([
-    query<RecordItem>("SELECT id,kind,data,updated_at FROM hotel_record WHERE workspace=$1 ORDER BY updated_at DESC,id", [id]),
+    query<RecordItem>("SELECT id,kind,data,to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') AS updated_at FROM hotel_record WHERE workspace=$1 ORDER BY hotel_record.updated_at DESC,id", [id]),
     query<Metric>("SELECT day,channel,visits,starts,bookings,revenue,cost FROM hotel_metric WHERE workspace=$1 ORDER BY day,channel", [id]),
     query<CampaignMetric>("SELECT campaign,day,channel,visits,starts,bookings,revenue,cost FROM hotel_campaign_metric WHERE workspace=$1 ORDER BY day,campaign", [id]),
     query<ContentRevision>("SELECT record,data->>'title' AS title,data->>'status' AS status,created_at FROM hotel_content_revision WHERE workspace=$1 ORDER BY created_at DESC", [id]),
@@ -438,7 +438,8 @@ async function importRecords(query: Query, workspace: string, dataset: Exclude<D
         data.importReference = base?.importReference ?? (reference === existing?.id ? undefined : reference);
         data.owner = text(row.owner, "Zuständigkeit", 120);
         data.amount = amount(row.amount, "Soll-Kosten");
-        data.actual = amount(row.actual, "Ist-Kosten");
+        if (row.actual === "") delete data.actual;
+        else if (row.actual !== undefined) data.actual = amount(row.actual, "Ist-Kosten");
         data.description = text(row.description, "Leistungsbeschreibung");
         data.status = base?.status ?? "Aktiv";
       }
@@ -496,7 +497,7 @@ export async function perform(id: string, body: Record<string, unknown>, runId?:
   const db = await database();
   await prepareWorkspace(db.query, id);
   // Serialize edits that can create or remove references to records or uploads.
-  if (["save", "delete", "import", "sync", "check", "campaign-automation", "profile-check", "owner-setting", "connection-setting"].includes(String(body.action))) {
+  if (["save", "delete", "import", "sync", "check", "campaign-automation", "profile-check", "owner-setting", "connection-setting", "channel-setting"].includes(String(body.action))) {
     await workspaceTransaction(db, id, (query) => performAction(query, id, body, runId));
   } else await performAction(db.query, id, body, runId);
   return readWorkspace(db.query, id);
@@ -652,7 +653,7 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
     for (const key of ["amount", "actual", "expected", "observed", "stars"] as const) {
       const value: unknown = raw[key];
       if (value === undefined || key === "stars" && kind === "review") continue;
-      const optionalPrice = kind === "offer" && (key === "expected" || key === "observed");
+      const optionalPrice = (kind === "offer" && (key === "expected" || key === "observed")) || (kind === "agency" && key === "actual");
       data[key] = optionalPrice && value === "" ? undefined : amount(value, key, key === "stars");
     }
     if (kind === "offer") {
@@ -709,11 +710,16 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
     const seen = new Set<string>();
     const rows = body.rows.map((r, i) => {
       if (!r || typeof r !== "object") throw new InputError("Ungültige Zeile " + (i + 2));
-      const row = { day: date(r.day), channel: channelCode(text(r.channel, "Kanal", 80), state.channelOptions),
+      const channelName = text(r.channel, "Kanal", 80);
+      const channel = channelCode(channelName, state.channelOptions);
+      if (!state.channelOptions.some((option) => option.code === channel)) {
+        throw new InputError("Zeile " + (i + 2) + " · Unbekannter Kanal „" + channelName + "“. Korrigiere den Namen oder lege den Kanal in den Einstellungen an.");
+      }
+      const row = { day: date(r.day), channel,
         visits: amount(r.visits, "Besuche", true), starts: amount(r.starts, "Buchungsstarts", true),
         bookings: amount(r.bookings, "Buchungen", true), revenue: amount(r.revenue, "Umsatz"), cost: amount(r.cost, "Kosten") };
       const key = row.day + "|" + row.channel;
-      if (!row.channel || seen.has(key) || row.starts > row.visits || row.bookings > row.starts) throw new InputError("Zeile " + (i + 2) + " enthält doppelte oder widersprüchliche Kennzahlen.");
+      if (seen.has(key) || row.starts > row.visits || row.bookings > row.starts) throw new InputError("Zeile " + (i + 2) + " enthält doppelte oder widersprüchliche Kennzahlen.");
       seen.add(key);
       return row;
     });
@@ -783,7 +789,8 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
       const normalize = (value: string) => key === "phone" ? value.replace(/[^\d+]/g, "") : value.toLocaleLowerCase("de-AT").replace(/\s+/g, " ");
       return wanted && normalize(wanted) !== normalize(current ?? "") ? [label + " · Portal: " + (current || "fehlt") + " · Vorgabe: " + wanted] : [];
     });
-    await revise(query, id, item, { ...item.data, status: differences.length ? "Abweichung" : "Geprüft", due: new Date().toISOString().slice(0, 10) });
+    const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Vienna", dateStyle: "short" }).format(new Date());
+    await revise(query, id, item, { ...item.data, status: differences.length ? "Abweichung" : "Geprüft", due: today });
     if (differences.length) {
       const task: Data = { title: "Portalprofil korrigieren · " + item.data.source, status: "Offen", description: differences.join("\n"), owner: item.data.owner, ownerId: item.data.ownerId, channel: "Portale", related: item.id };
       await query(`INSERT INTO hotel_record (workspace,id,kind,data) VALUES ($1,$2,'task',$3::jsonb)
@@ -797,6 +804,7 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
   } else if (body.action === "check") {
     const offers = state.records.filter((r) => r.kind === "offer" && (!body.id || r.id === body.id));
     if (!offers.length) throw new InputError("Für diesen Prüflauf fehlen die Angebote.");
+    const latest = latestOfferChecks(state.records);
     for (const offer of offers) {
       const { expected, observed, title, availability, observedAvailability, start, due, room, occupancy, tariff, source } = offer.data;
       const comparison = offerComparison(offer.data);
@@ -808,13 +816,15 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
         availability !== undefined || observedAvailability !== undefined ? "Verfügbarkeit Website " + availabilityLabel(availability).toLowerCase() + " · Quelle " + availabilityLabel(observedAvailability).toLowerCase() : "",
         comparison.incomplete ? "Vergleichsdaten fehlen." : ""].filter(Boolean).join("\n");
       const audit = { title, description, status: comparison.matches ? "OK" : status, related: offer.id };
-      const recorded = await query<{ id: string }>(`WITH checked AS (
-        UPDATE hotel_record SET data=jsonb_set(data,'{status}',to_jsonb($4::text)),updated_at=now()
-        WHERE workspace=$1 AND id=$2 AND kind='offer' AND data=$3::jsonb RETURNING id
-      ) INSERT INTO hotel_record (workspace,id,kind,data)
-        SELECT $1,$5,'check',$6::jsonb FROM checked ON CONFLICT DO NOTHING RETURNING id`,
-        [id, offer.id, JSON.stringify(offer.data), status, runId ? runId + "-" + offer.id : randomUUID(), JSON.stringify(audit)]);
-      if (recorded.rows.length && differs && !state.records.some((r) => r.kind === "task" && r.data.related === offer.id && r.data.status !== "Erledigt")) {
+      const previous = latest.get(offer.id);
+      const sameResult = previous && previous.data.title === audit.title && previous.data.description === audit.description && previous.data.status === audit.status;
+      if (status !== offer.data.status) {
+        await query("UPDATE hotel_record SET data=jsonb_set(data,'{status}',to_jsonb($3::text)) WHERE workspace=$1 AND id=$2", [id, offer.id, status]);
+      }
+      await query(`INSERT INTO hotel_record (workspace,id,kind,data) VALUES ($1,$2,'check',$3::jsonb)
+        ON CONFLICT (workspace,id) DO UPDATE SET updated_at=now() WHERE hotel_record.kind='check'`,
+        [id, sameResult ? previous.id : randomUUID(), JSON.stringify(audit)]);
+      if (differs && !state.records.some((r) => r.kind === "task" && r.data.related === offer.id && r.data.status !== "Erledigt")) {
         await query(`INSERT INTO hotel_record (workspace,id,kind,data) VALUES ($1,$2,'task',$3::jsonb)
           ON CONFLICT (workspace,id) DO UPDATE SET data=excluded.data,updated_at=now() WHERE hotel_record.data->>'status'='Erledigt'`,
           [id, "check-task-" + offer.id, JSON.stringify({ title: "Angebot abgleichen: " + title, description, status: "Offen", channel: "Direktvertrieb", related: offer.id })]);

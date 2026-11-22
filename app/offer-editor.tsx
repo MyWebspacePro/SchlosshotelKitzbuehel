@@ -76,7 +76,7 @@ export default function OfferEditor({ item, sources, media, onMediaAdded, onMedi
         <div className="offer-media-heading"><h4>Angebotsvorschau</h4>{offer && <span className="pill">{offer.status}</span>}</div>
         <div className="offer-preview">
           {image ? <img src={image} alt="Ausgewähltes Angebotsfoto" /> : <div className="offer-preview-empty"><ImageIcon size={31} strokeWidth={1.4} /><span>Foto aus der Mediathek wählen</span></div>}
-          <div className="offer-preview-caption"><strong>{title.trim() || "Angebotstitel"}</strong>{price !== "" && <span>{priceEuro(Number(price))} auf der Website</span>}</div>
+          <div className="offer-preview-caption"><strong>{title.trim() || "Angebotstitel"}</strong>{price !== "" && Number.isFinite(Number(price)) && <span>{priceEuro(Number(price))} auf der Website</span>}</div>
         </div>
         <PicturePicker name="Foto zur Mediathek hochladen" value={image} media={media} busy={uploading}
           onSelect={(photo) => { setImage(photo); setImageMessage(""); }} onUpload={addPhoto} onDeleted={(photo) => {

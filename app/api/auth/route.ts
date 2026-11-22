@@ -2,15 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthenticationError, login, logout, saveAccount, throttleAuth, TooManyAttempts } from "../../../lib/accounts";
 import { PasswordServiceBusy } from "../../../lib/passwords";
 import { InputError } from "../../../lib/store";
-import { authenticationCookie, requestAccess, setAuthenticationCookie, setWorkspaceCookie, workspaceCookie } from "../../../lib/workspace-cookie";
+import { authenticationCookie, requestAccess, requestAddress, setAuthenticationCookie, setWorkspaceCookie, validRequestOrigin, workspaceCookie } from "../../../lib/workspace-cookie";
 
 export const runtime = "nodejs";
 const send = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
 export async function POST(request: NextRequest) {
-  const origin = request.headers.get("origin");
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  if (origin && (!URL.canParse(origin) || new URL(origin).host !== host)) return send({ error: "Ungültiger Ursprung." }, 403);
+  if (!validRequestOrigin(request)) return send({ error: "Ungültiger Ursprung." }, 403);
   if (!request.headers.get("content-type")?.includes("application/json")) return send({ error: "Ungültiges Format." }, 415);
   try {
     if (Number(request.headers.get("content-length")) > 4096) return send({ error: "Die Eingabe ist zu groß." }, 413);
@@ -27,8 +25,7 @@ export async function POST(request: NextRequest) {
       return response;
     }
     if (body.action === "login" || body.action === "account") {
-      const address = request.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim() || "local";
-      await throttleAuth("address:" + address.slice(0, 64), 50);
+      await throttleAuth("address:" + requestAddress(request), 50);
     }
     if (body.action === "login" || body.action === "account") {
       const access = body.action === "account" ? await requestAccess(request) : undefined;

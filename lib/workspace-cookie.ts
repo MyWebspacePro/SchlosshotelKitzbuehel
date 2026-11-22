@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { NextRequest, NextResponse } from "next/server";
-import { resolveAccess, sessionSeconds } from "./accounts";
+import { resolveAccess, sessionSeconds, throttleAuth } from "./accounts";
 
 const workspaceName = "schlosshotel_workspace";
 const sessionName = "schlosshotel_session";
@@ -21,7 +21,21 @@ export async function requestAccess(request: NextRequest, create = false) {
   const token = authenticationCookie(request);
   const access = await resolveAccess(guest, token);
   if (access || guest || token || !create) return access;
+  await throttleAuth("guest-workspace:" + requestAddress(request), 30);
   return { id: randomUUID(), role: "guest" as const };
+}
+
+export function requestAddress(request: NextRequest) {
+  return process.env.TRUST_PROXY_HEADERS === "1"
+    ? request.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim().slice(0, 64) || "proxy"
+    : "direct";
+}
+
+export function validRequestOrigin(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  if (!origin) return request.headers.get("sec-fetch-site") !== "cross-site";
+  const forwardedHost = process.env.TRUST_PROXY_HEADERS === "1" ? request.headers.get("x-forwarded-host") : null;
+  return URL.canParse(origin) && new URL(origin).host === (forwardedHost ?? request.headers.get("host"));
 }
 
 export function setWorkspaceCookie(response: NextResponse, id: string) {

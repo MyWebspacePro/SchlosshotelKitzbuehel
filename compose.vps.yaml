@@ -1,5 +1,7 @@
 services:
   web:
+    environment:
+      TRUST_PROXY_HEADERS: "1"
     networks:
       - default
       - coolify

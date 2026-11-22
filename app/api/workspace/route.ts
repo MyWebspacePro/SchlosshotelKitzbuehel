@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { accountSummaries, type Access } from "../../../lib/accounts";
-import { requestAccess, setWorkspaceCookie } from "../../../lib/workspace-cookie";
+import { accountSummaries, TooManyAttempts, type Access } from "../../../lib/accounts";
+import { requestAccess, setWorkspaceCookie, validRequestOrigin } from "../../../lib/workspace-cookie";
 import { getWorkspace, InputError, perform } from "../../../lib/store";
 import type { Workspace, WorkspaceResponse } from "../../../lib/model";
 
@@ -22,16 +22,20 @@ export async function GET(request: NextRequest) {
     const access = await requestAccess(request, true);
     return access ? await send(await getWorkspace(access.id), access) : denied();
   } catch (error) {
+    if (error instanceof TooManyAttempts) {
+      return NextResponse.json({ error: "Zu viele neue Gast-Arbeitsbereiche. Versuche es bitte später erneut." }, { status: 429, headers: { "Retry-After": "900" } });
+    }
     console.error(error);
     return NextResponse.json({ error: "Der Arbeitsbereich ist nicht erreichbar." }, { status: 500 });
   }
 }
 export async function POST(request: NextRequest) {
   try {
+    if (!validRequestOrigin(request)) return NextResponse.json({ error: "Ungültiger Ursprung." }, { status: 403 });
     if (!request.headers.get("content-type")?.includes("application/json")) return NextResponse.json({ error: "Ungültiges Format." }, { status: 415 });
     const raw = await request.text();
     if (raw.length > 500000) return NextResponse.json({ error: "Die Datei ist zu groß." }, { status: 413 });
-    const access = await requestAccess(request, true);
+    const access = await requestAccess(request);
     if (!access) return denied();
     const body = JSON.parse(raw);
     if (!body || typeof body !== "object") return NextResponse.json({ error: "Ungültige Eingabe." }, { status: 400 });

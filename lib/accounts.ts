@@ -43,8 +43,9 @@ export async function resolveAccess(guest: string | undefined, token: string | u
     if (account) return { ...identity(account), id: account.workspace, tokenHash };
   }
   if (!guest) return undefined;
-  const result = await query("SELECT 1 FROM hotel_account WHERE workspace=$1 LIMIT 1", [guest]);
-  return result.rows.length ? undefined : { id: guest, role: "guest" };
+  const result = await query(`SELECT 1 FROM hotel_workspace WHERE id=$1 AND ready
+    AND NOT EXISTS (SELECT 1 FROM hotel_account WHERE workspace=$1)`, [guest]);
+  return result.rows.length ? { id: guest, role: "guest" } : undefined;
 }
 
 export async function accountSummaries(access: Access): Promise<AccountSummary[]> {

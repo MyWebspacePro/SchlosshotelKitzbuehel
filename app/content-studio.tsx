@@ -1,16 +1,27 @@
 "use client";
 
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Download, ImagePlus, Instagram, Mail, Plus, Save, Sparkles, Trash2 } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { download, uploadPhoto } from "../lib/browser-files";
-import { carouselZip, newsletterZip, renderSlide } from "../lib/content-export";
+import { carouselZip, drawSlideTextPanel, newsletterZip, renderSlide } from "../lib/content-export";
 import PicturePicker from "./picture-picker";
-import { brandImages, defaultSlideCrop, slidePalettes, type ContentRevision, type Data, type MediaImage, type Newsletter, type RecordItem, type Slide, type SlideCrop } from "../lib/model";
+import { brandImages, defaultSlideCrop, type ContentRevision, type Data, type MediaImage, type Newsletter, type RecordItem, type Slide, type SlideCrop } from "../lib/model";
 
 export type ContentFormat = "instagram" | "newsletter";
 export const contentFormat = (item: RecordItem): ContentFormat => item.data.format ?? (item.data.channel === "Newsletter" ? "newsletter" : "instagram");
 const newSlide = (id: string, title = "", image = ""): Slide => ({ id, title, text: "", image, layout: "editorial" });
 const emptyMail: Newsletter = { subject: "", preheader: "", image: "", cta: "", url: "" };
+
+function SlideTextPreview({ title, text, palette }: Pick<Slide, "title" | "text" | "palette">) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const ctx = canvas.current?.getContext("2d");
+    if (!ctx || drawSlideTextPanel(ctx, title, text, palette)) return;
+    ctx.font = "32px sans-serif";
+    ctx.fillText("Text kürzen oder Zeilenumbrüche entfernen", 74, 155);
+  }, [title, text, palette]);
+  return <canvas className="carousel-text" ref={canvas} width={1080} height={430} role="img" aria-label={[title, text].filter(Boolean).join(" · ") || "Slide-Text"} />;
+}
 
 export default function ContentStudio({ item, format, offers, campaigns, revisions, media, onMediaAdded, onMediaDeleted, busy, ai, save, generate, entryActions }: {
   item?: RecordItem; format: ContentFormat; offers: RecordItem[]; busy: boolean; ai: boolean;
@@ -32,7 +43,6 @@ export default function ContentStudio({ item, format, offers, campaigns, revisio
   const [progress, setProgress] = useState("");
   const [dirty, setDirty] = useState(false);
   const slide = slides[active] ?? slides[0];
-  const palette = slidePalettes[slide.palette ?? "bordeaux"];
   const label = format === "instagram" ? "Instagram-Carousel" : "Newsletter";
   const status = dirty ? "Ungespeichert" : existing?.status ?? "Neuer Entwurf";
   const editorData = (approved: boolean): Data => ({
@@ -138,7 +148,7 @@ export default function ContentStudio({ item, format, offers, campaigns, revisio
         <div className="preview-top"><span>Vorschau</span><span>{format === "instagram" ? active + 1 + " / " + slides.length : "E-Mail"}</span></div>
         {format === "instagram" ? <><div className={"carousel-canvas " + (slide.layout === "photo" ? "canvas-photo" : "")}>
           <SlidePicture key={slide.id + slide.image} slide={slide} onCrop={(crop) => patchSlide(slide.id, { crop })} />
-          {slide.layout === "editorial" && <div className="carousel-text" style={{ background: palette.background, color: palette.text }}><small style={{ color: palette.brand }}>SCHLOSSHOTEL KITZBÜHEL</small><strong>{slide.title || "Slide-Titel"}</strong><p>{slide.text}</p></div>}
+          {slide.layout === "editorial" && <SlideTextPreview title={slide.title} text={slide.text} palette={slide.palette} />}
         </div><div className="preview-nav"><button className="icon-button" aria-label="Vorheriger Slide" disabled={active === 0} onClick={() => setActive(active - 1)}><ChevronLeft size={19} /></button><span>Slide {active + 1} von {slides.length}</span><button className="icon-button" aria-label="Nächster Slide" disabled={active === slides.length - 1} onClick={() => setActive(active + 1)}><ChevronRight size={19} /></button></div>
           {slide.image && <CropControls crop={slide.crop ?? defaultSlideCrop} onChange={(crop) => patchSlide(slide.id, { crop })} />}
           {body && <p className="studio-caption">{body}</p>}</> : <div className="mail-preview">

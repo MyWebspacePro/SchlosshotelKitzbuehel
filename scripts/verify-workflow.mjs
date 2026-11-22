@@ -58,6 +58,11 @@ assert.equal(state.connections.find((entry) => entry.id === "meta").account, "12
 await requestWorkspace({ action: "sync", id: "meta" }, 400);
 await requestWorkspace({ action: "connection-setting", id: "booking", mode: "live", account: "1234" }, 400);
 const metrics = { day: "2026-11-20", channel: "Instagram", visits: 200, starts: 40, bookings: 10, revenue: 1500, cost: 60 };
+const unknownChannel = await requestWorkspace({ action: "import", rows: [{ ...metrics, channel: "Gogle Ads" }, metrics] }, 400);
+assert.match(unknownChannel.error, /Zeile 2.*Gogle Ads/);
+const acceptedMetrics = await requestWorkspace({ action: "import", rows: [{ ...metrics, channel: " instagram " }] });
+assert.ok(acceptedMetrics.metrics.some((entry) => entry.day === metrics.day && entry.channel === "Instagram" && entry.revenue === metrics.revenue));
+assert.ok(!acceptedMetrics.metrics.some((entry) => entry.channel === "Gogle Ads"));
 await requestWorkspace({ action: "import", rows: [{ ...metrics, bookings: 400 }], campaign: campaign.id }, 400);
 await requestWorkspace({ action: "import", rows: [metrics], campaign: campaign.id });
 state = await requestWorkspace({ action: "import", rows: [metrics], campaign: campaign.id });
@@ -106,6 +111,13 @@ assert.deepEqual(updatedAgency.channels, ["Google Ads", "Newsletter"]);
 assert.equal(updatedAgency.channel, undefined);
 assert.equal(updatedAgency.amount, legacyAgency.data.amount);
 assert.equal(updatedAgency.actual, legacyAgency.data.actual);
+const newAgency = { ...agencyData, title: "Agentur ohne Abrechnung", channels: ["Google Ads"], amount: 1200, actual: "" };
+state = await requestWorkspace({ action: "save", kind: "agency", data: newAgency });
+const newAgencyId = state.records.find((row) => row.data.title === newAgency.title).id;
+assert.equal(state.records.find((row) => row.id === newAgencyId).data.actual, undefined);
+state = await requestWorkspace({ action: "save", kind: "agency", id: newAgencyId, data: { ...newAgency, actual: 0 } });
+assert.equal(state.records.find((row) => row.id === newAgencyId).data.actual, 0);
+await requestWorkspace({ action: "delete", id: newAgencyId });
 await requestWorkspace({ action: "save", kind: "agency", id: legacyAgency.id, data: { ...agencyData, channels: ["Unbekannter Kanal"] } }, 400);
 await requestWorkspace({ action: "channel-setting", code: "Newsletter", active: false });
 await requestWorkspace({ action: "save", kind: "agency", data: { ...agencyData, title: "Neue Agentur", channels: ["Newsletter"] } }, 400);
@@ -131,12 +143,37 @@ assert.ok(!state.records.find((r) => r.data.title === "Zeitraumprüfung").data.r
 
 const offer = { id: "o1", source: "HNS", title: "Winterauszeit", start: "2026-12-18", due: "2026-12-20",
   room: "Doppelzimmer", occupancy: 2, tariff: "Frühstück", expected: 590, observed: 590, availability: "ja", observedAvailability: "nein" };
+const newOffer = { ...offer, id: "aufgaben-pruefung", title: "Angebot für Aufgabenprüfung" };
+state = await requestWorkspace({ action: "import", dataset: "offers", rows: [newOffer] });
+const taskOfferId = state.records.find((r) => r.kind === "offer" && r.data.title === newOffer.title).id;
+const relatedTasks = (workspace) => workspace.records.filter((r) => r.kind === "task" && r.data.related === taskOfferId);
+assert.equal(relatedTasks(state).length, 0);
+state = await requestWorkspace({ action: "check", id: taskOfferId });
+const [checkTask] = relatedTasks(state);
+assert.equal(checkTask?.data.status, "Offen");
+assert.match(checkTask.data.title, /Angebot für Aufgabenprüfung/);
+state = await requestWorkspace({ action: "check", id: taskOfferId });
+assert.deepEqual(relatedTasks(state).map((task) => task.id), [checkTask.id]);
+await requestWorkspace({ action: "save", kind: "task", id: checkTask.id, data: { ...checkTask.data, status: "Erledigt" } });
+state = await requestWorkspace({ action: "check", id: taskOfferId });
+assert.deepEqual(relatedTasks(state).map((task) => [task.id, task.data.status]), [[checkTask.id, "Offen"]]);
+await requestWorkspace({ action: "delete", id: taskOfferId });
 await requestWorkspace({ action: "import", dataset: "offers", rows: [offer] });
 state = await requestWorkspace({ action: "check", id: "o1" });
 assert.equal(state.records.find((r) => r.id === "o1").data.status, "Abweichung");
+const checksForOffer = (workspace) => workspace.records.filter((r) => r.kind === "check" && r.data.related === "o1");
+const firstCheck = checksForOffer(state)[0];
+const offerTime = state.records.find((r) => r.id === "o1").updated_at;
+await new Promise((resolve) => setTimeout(resolve, 20));
+await Promise.all([requestWorkspace({ action: "check", id: "o1" }), requestWorkspace({ action: "check", id: "o1" })]);
+state = await requestWorkspace();
+assert.deepEqual(checksForOffer(state).map((r) => r.id), [firstCheck.id]);
+assert.ok(Date.parse(checksForOffer(state)[0].updated_at) > Date.parse(firstCheck.updated_at));
+assert.equal(state.records.find((r) => r.id === "o1").updated_at, offerTime);
 await requestWorkspace({ action: "import", dataset: "offers", rows: [{ ...offer, observedAvailability: "ja" }] });
 state = await requestWorkspace({ action: "check", id: "o1" });
 assert.equal(state.records.find((r) => r.id === "o1").data.status, "Geprüft");
+assert.deepEqual(checksForOffer(state).map((r) => r.data.status), ["OK", "Abweichung"]);
 await requestWorkspace({ action: "save", kind: "offer", id: "o1", data: {
   title: offer.title, status: "Zu prüfen", expected: "590.15", observed: "", availability: "ja", observedAvailability: ""
 } });

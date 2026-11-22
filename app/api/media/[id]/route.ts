@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { deleteMedia, getMedia } from "../../../../lib/store";
-import { requestAccess } from "../../../../lib/workspace-cookie";
+import { requestAccess, validRequestOrigin } from "../../../../lib/workspace-cookie";
 
 export const runtime = "nodejs";
 const mediaId = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/;
@@ -17,6 +17,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 }
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  if (!validRequestOrigin(request)) return NextResponse.json({ error: "Ungültiger Ursprung." }, { status: 403 });
   const workspace = (await requestAccess(request))?.id;
   const { id } = await context.params;
   if (!workspace || !mediaId.test(id)) return NextResponse.json({ error: "Das Bild wurde nicht gefunden." }, { status: 404 });

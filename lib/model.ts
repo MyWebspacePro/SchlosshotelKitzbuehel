@@ -29,6 +29,17 @@ export type Data = {
   report?: ReportSnapshot;
 };
 export type RecordItem = { id: string; kind: Kind; data: Data; updated_at: string };
+
+export function latestOfferChecks(records: RecordItem[]) {
+  const latest = new Map<string, RecordItem>();
+  for (const record of records) {
+    const offer = record.data.related;
+    if (record.kind !== "check" || !offer) continue;
+    const previous = latest.get(offer);
+    if (!previous || record.updated_at > previous.updated_at) latest.set(offer, record);
+  }
+  return latest;
+}
 export type ConnectionMode = "example" | "import" | "live" | "off";
 export type Connection = { id: string; name: string; category: string; last_sync: string | null; last_result: string | null;
   mode: ConnectionMode; account: string; profile_url: string; liveAvailable: boolean };

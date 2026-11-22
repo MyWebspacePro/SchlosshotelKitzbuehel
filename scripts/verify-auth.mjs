@@ -44,15 +44,25 @@ const preAuth = client();
 
 const first = await root.send("/api/workspace");
 assert.equal(first.identity.role, "guest");
+await post(client(), "/api/workspace", { action: "report" }, 401);
+const unknownGuest = client();
+unknownGuest.cookies.set("schlosshotel_workspace", randomUUID());
+await unknownGuest.send("/api/workspace", {}, 401);
 preAuth.cookies.set("schlosshotel_workspace", root.cookies.get("schlosshotel_workspace"));
 const uniqueTask = "Geschützter Eintrag " + unique;
 await post(root, "/api/workspace", { action: "save", kind: "task", data: { title: uniqueTask, status: "Offen" } });
 const report = await post(root, "/api/workspace", { action: "report", kind: "overview", title: "Geschützter Bericht " + unique });
 const pdf = "/api/reports/" + report.records.find((record) => record.kind === "report").id + "/pdf";
+const originHeaders = { Origin: "https://external.example" };
+await root.send("/api/workspace", { method: "POST", body: '{"action":"report"}', headers: { ...originHeaders, "Content-Type": "application/json" } }, 403);
+await root.send("/api/media", { method: "POST", body: "Ungültig", headers: { "Content-Type": "image/webp" } }, 400);
+await root.send("/api/media", { method: "POST", body: Buffer.alloc(1_800_001), headers: { "Content-Type": "image/webp" } }, 413);
+await root.send("/api/media", { method: "POST", body: "Ungültig", headers: { ...originHeaders, "Content-Type": "image/webp" } }, 403);
 const file = await root.send("/api/media", {
   method: "POST", body: await readFile(new URL("../public/brand/spa.webp", import.meta.url)),
   headers: { "Content-Type": "image/webp", "X-Media-Name": "konto-pruefung.webp" }
 }, 201);
+await root.send(file.file, { method: "DELETE", headers: originHeaders }, 403);
 
 await post(root, "/api/auth", { action: "account", owner: "team-marketing", username: admin, password: adminPassword });
 const protectedData = await root.send("/api/workspace");
@@ -63,8 +73,15 @@ await preAuth.send("/api/workspace", {}, 401);
 await preAuth.send(pdf, {}, 404);
 await preAuth.send(file.file, {}, 404);
 await preAuth.send(file.file, { method: "DELETE" }, 404);
-await root.send(pdf);
-await root.send(file.file);
+const rootCookie = [...root.cookies].map(([name, value]) => name + "=" + value).join("; ");
+const pdfBytes = await fetch(new URL(pdf, base), { headers: { Cookie: rootCookie } });
+assert.equal(pdfBytes.status, 200);
+assert.match(pdfBytes.headers.get("content-type"), /application\/pdf/);
+assert.equal(Buffer.from(await pdfBytes.arrayBuffer()).subarray(0, 5).toString(), "%PDF-");
+const imageBytes = await fetch(new URL(file.file, base), { headers: { Cookie: rootCookie } });
+assert.equal(imageBytes.status, 200);
+assert.match(imageBytes.headers.get("content-type"), /image\/webp/);
+assert.deepEqual(Buffer.from(await imageBytes.arrayBuffer()), await readFile(new URL("../public/brand/spa.webp", import.meta.url)));
 
 await post(root, "/api/auth", { action: "account", owner: "team-content", username: member, password: memberPassword });
 await post(worker, "/api/auth", { action: "login", username: member.toUpperCase(), password: memberPassword });

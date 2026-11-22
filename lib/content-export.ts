@@ -1,19 +1,72 @@
 import { defaultSlideCrop, slidePalettes, type Data, type Slide } from "./model";
 import { download } from "./browser-files";
 
+const graphemeSegmenter = new Intl.Segmenter("de");
+
 function wrap(ctx: CanvasRenderingContext2D, text: string, width: number) {
   const lines: string[] = [];
   for (const paragraph of text.split("\n")) {
     let line = "";
     for (const word of paragraph.split(/\s+/).filter(Boolean)) {
-      if (line && ctx.measureText(line + " " + word).width > width) {
-        lines.push(line);
-        line = word;
-      } else line += (line ? " " : "") + word;
+      const joined = line ? line + " " + word : word;
+      if (ctx.measureText(joined).width <= width) {
+        line = joined;
+        continue;
+      }
+      if (line) lines.push(line);
+      line = "";
+      for (const { segment } of graphemeSegmenter.segment(word)) {
+        if (line && ctx.measureText(line + segment).width > width) {
+          lines.push(line);
+          line = "";
+        }
+        line += segment;
+      }
     }
     lines.push(line);
   }
   return lines;
+}
+
+function drawEditorialText(ctx: CanvasRenderingContext2D, title: string, body: string) {
+  const width = 930;
+  const top = 98;
+  const bottom = 390;
+  const gap = 10;
+  ctx.textBaseline = "top";
+  for (let titleSize = 56; titleSize >= 26; titleSize -= 2) {
+    const bodySize = Math.round(31 * titleSize / 56);
+    const titleStep = Math.ceil(titleSize * 1.16);
+    const bodyStep = Math.ceil(bodySize * 1.35);
+    const titleFont = titleSize + "px Georgia";
+    const bodyFont = bodySize + "px sans-serif";
+    ctx.font = titleFont;
+    const titleLines = title ? wrap(ctx, title, width) : [];
+    ctx.font = bodyFont;
+    const bodyLines = body ? wrap(ctx, body, width) : [];
+    const bodyTop = top + titleLines.length * titleStep + (titleLines.length && bodyLines.length ? gap : 0);
+    if ((bodyLines.length ? bodyTop + bodyLines.length * bodyStep : top + titleLines.length * titleStep) > bottom) continue;
+    ctx.font = titleFont;
+    titleLines.forEach((line, i) => ctx.fillText(line, 74, top + i * titleStep));
+    ctx.font = bodyFont;
+    bodyLines.forEach((line, i) => ctx.fillText(line, 74, bodyTop + i * bodyStep));
+    return true;
+  }
+  return false;
+}
+
+const slideTextOverflow = "Der Slide-Text passt nicht ins Layout. Kürze ihn oder entferne einige Zeilenumbrüche.";
+
+export function drawSlideTextPanel(ctx: CanvasRenderingContext2D, title: string, text: string, color: Slide["palette"]) {
+  const palette = slidePalettes[color ?? "bordeaux"];
+  ctx.fillStyle = palette.background;
+  ctx.fillRect(0, 0, 1080, 430);
+  ctx.fillStyle = palette.brand;
+  ctx.textBaseline = "alphabetic";
+  ctx.font = "22px sans-serif";
+  ctx.fillText("SCHLOSSHOTEL KITZBÜHEL", 74, 72);
+  ctx.fillStyle = palette.text;
+  return drawEditorialText(ctx, title, text);
 }
 
 export async function renderSlide(slide: Slide): Promise<Blob> {
@@ -38,19 +91,8 @@ export async function renderSlide(slide: Slide): Promise<Blob> {
   ctx.drawImage(image, (1080 - w) * crop.x / 100, (imageHeight - h) * crop.y / 100, w, h);
   ctx.restore();
   if (slide.layout === "editorial") {
-    const palette = slidePalettes[slide.palette ?? "bordeaux"];
-    ctx.fillStyle = palette.background;
-    ctx.fillRect(0, 920, 1080, 430);
-    ctx.fillStyle = palette.brand;
-    ctx.font = "22px sans-serif";
-    ctx.fillText("SCHLOSSHOTEL KITZBÜHEL", 74, 992);
-    ctx.fillStyle = palette.text;
-    ctx.font = "56px Georgia";
-    let y = 1073;
-    for (const line of wrap(ctx, slide.title, 930)) { ctx.fillText(line, 74, y, 930); y += 65; }
-    ctx.font = "31px sans-serif";
-    y += 5;
-    for (const line of wrap(ctx, slide.text, 930)) { ctx.fillText(line, 74, y, 930); y += 42; }
+    ctx.translate(0, 920);
+    if (!drawSlideTextPanel(ctx, slide.title, slide.text, slide.palette)) throw new Error(slideTextOverflow);
   }
   return new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Der PNG-Export ist fehlgeschlagen.")), "image/png"));
 }
@@ -60,7 +102,11 @@ export async function carouselZip(slides: Slide[], caption: string) {
   const { zipSync, strToU8 } = await import("fflate");
   const files: Record<string, Uint8Array> = { "caption.txt": strToU8(caption) };
   for (const [i, slide] of slides.entries()) {
-    files["slide-" + String(i + 1).padStart(2, "0") + ".png"] = new Uint8Array(await (await renderSlide(slide)).arrayBuffer());
+    try {
+      files["slide-" + String(i + 1).padStart(2, "0") + ".png"] = new Uint8Array(await (await renderSlide(slide)).arrayBuffer());
+    } catch (error) {
+      throw new Error("Slide " + (i + 1) + ": " + (error instanceof Error ? error.message : "PNG-Export fehlgeschlagen."));
+    }
   }
   const zip = zipSync(files, { level: 0 });
   download("instagram-karussell.zip", new Uint8Array(zip), "application/zip");

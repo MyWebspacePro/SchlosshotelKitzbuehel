@@ -19,7 +19,7 @@ import { sendAuth, SignIn } from "./team-access";
 import MetricImport from "./metric-import";
 import type { Dataset } from "../lib/import-fields";
 import { websitePages } from "../lib/website";
-import { agencyChannels, availabilityLabel, campaignRowsFor, channelLabel, euro, number, offerComparison, pct, priceEuro, sum, type ChannelOption, type Connection, type Kind, type MediaImage, type Metric, type OwnerOption, type RecordItem, type WorkspaceResponse } from "../lib/model";
+import { agencyChannels, availabilityLabel, campaignRowsFor, channelLabel, euro, latestOfferChecks, number, offerComparison, pct, priceEuro, sum, type ChannelOption, type Connection, type Kind, type MediaImage, type Metric, type OwnerOption, type RecordItem, type WorkspaceResponse } from "../lib/model";
 
 const nav = [
   { id: "home", label: "Übersicht", icon: LayoutGrid },
@@ -61,7 +61,7 @@ const headings: Record<Exclude<Page, "home">, [string, string]> = {
   settings: ["Einstellungen", "Verwalte Personen, Kanäle und Kontoverbindungen für diesen Arbeitsbereich."]
 };
 const short = (date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.slice(8, 10) + "." + date.slice(5, 7) + "." : date;
-const localTime = (date: string) => new Intl.DateTimeFormat("de-AT", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Vienna" }).format(new Date(date));
+const localTime = (date: string, timeStyle: "short" | "medium" = "short") => new Intl.DateTimeFormat("de-AT", { dateStyle: "medium", timeStyle, timeZone: "Europe/Vienna" }).format(new Date(date));
 
 function pill(status: string) {
   return <span className={"pill " + (["Geprüft", "OK", "Aktiv", "Freigegeben", "Erledigt", "Erstellt"].includes(status) ? "good" : ["Zu prüfen", "Abweichung", "Offen"].includes(status) ? "warm" : "muted")}>{status}</span>;
@@ -124,7 +124,10 @@ export default function Cockpit() {
   const refreshWorkspace = useCallback(async (signal?: AbortSignal) => {
     const response = await fetch("/api/workspace", { signal, cache: "no-store" });
     if (response.status === 401) { setData(undefined); setLocked(true); return; }
-    if (!response.ok) throw new Error("Der Arbeitsbereich konnte nicht geladen werden.");
+    if (!response.ok) {
+      const result = await response.json().catch(() => null);
+      throw new Error(result?.error || "Der Arbeitsbereich konnte nicht geladen werden.");
+    }
     setData(await response.json());
     setLocked(false);
   }, []);
@@ -346,7 +349,7 @@ export default function Cockpit() {
             </section>}
             {page === "agency" && <div className="kpis budget-kpis">
               <Kpi icon={<Euro size={17} />} label="Geplantes Budget" value={euro(visibleRecords.reduce((a, r) => a + (r.data.amount ?? 0), 0))} foot="Summe der Agenturbudgets" />
-              <Kpi icon={<ArrowDownRight size={17} />} label="Ist-Kosten" value={euro(visibleRecords.reduce((a, r) => a + (r.data.actual ?? 0), 0))} foot="Erfasste Ausgaben" />
+              <Kpi icon={<ArrowDownRight size={17} />} label="Ist-Kosten" value={visibleRecords.some((r) => r.data.actual !== undefined) ? euro(visibleRecords.reduce((a, r) => a + (r.data.actual ?? 0), 0)) : "—"} foot="Erfasste Ausgaben" />
             </div>}
             {["task", "review", "campaign"].includes(page) && <div className="filter-bar">{["Alle", ...(statuses[page as Kind] ?? [])].map((status) => <button className={statusFilter === status ? "active-filter" : ""} aria-pressed={statusFilter === status} key={status} onClick={() => setStatusFilter(status)}>{status}</button>)}</div>}
             {page === "offer" ? <section className="offer-grid" aria-label="Angebote">
@@ -364,9 +367,7 @@ export default function Cockpit() {
               {records.filter((r) => r.kind === "profile").map((r) => <div key={r.id} className="profile-row"><RecordRow item={r} onClick={() => open({ type: "edit", kind: "profile", item: r })} /><button className="button" disabled={busy || !brand} onClick={() => action({ action: "profile-check", id: r.id }, "Portalprofil abgeglichen.")}>Abgleichen</button></div>)}
               {!brand && <Empty>Lege zuerst die zentralen Markenangaben für den Abgleich fest.</Empty>}
             </section>}
-            {page === "offer" && <section className="card panel table-card"><div className="card-heading"><div><h3>Prüfprotokoll</h3><p>Ergebnisse der ausgeführten Angebotsprüfungen</p></div></div>
-              {records.filter((r) => r.kind === "check").length === 0 ? <Empty>Starte eine Prüfung, um die Preisabweichungen zu dokumentieren.</Empty> : records.filter((r) => r.kind === "check").map((r) => <div className="record-row static" key={r.id}><div><strong>{r.data.title}</strong><small>{r.data.description} · {localTime(r.updated_at)}</small></div>{pill(r.data.status)}</div>)}
-            </section>}
+            {page === "offer" && <OfferCheckResults records={records} offers={offers} />}
             {page === "offer" && <section className="card panel table-card">
               <div className="card-heading"><div><h3>Website- und SEO-Check</h3><p>Prüft öffentliche Seiten auf den HTTP-Status, Seitentitel, H1, Meta-Beschreibung und vorhandene Buchungslinks.</p></div></div>
               <div className="site-actions"><label className="form-field">Hotelseite<select value={siteUrl} onChange={(e) => setSiteUrl(e.target.value)}>
@@ -471,6 +472,31 @@ function OfferCard({ item, onClick }: { item: RecordItem; onClick: () => void })
     </div>
   </button>;
 }
+
+function OfferCheckResults({ records, offers }: { records: RecordItem[]; offers: RecordItem[] }) {
+  const [historyLimit, setHistoryLimit] = useState(25);
+  const latest = latestOfferChecks(records);
+  const current = offers.flatMap((offer) => latest.get(offer.id) ?? []);
+  const currentIds = new Set(current.map((result) => result.id));
+  const history = records.filter((record) => record.kind === "check" && !currentIds.has(record.id));
+
+  function row(result: RecordItem) {
+    return <div className="record-row static site-result" key={result.id}>
+      <div><strong>{result.data.title}</strong><small><time dateTime={result.updated_at}>{localTime(result.updated_at, "medium")}</time></small><p>{result.data.description}</p></div>
+      {pill(result.data.status)}
+    </div>;
+  }
+
+  return <section className="card panel table-card" aria-label="Angebotsprüfungen">
+    <div className="card-heading"><div><h3>Letzte Prüfung je Angebot</h3><p>Preis und Verfügbarkeit im Vergleich</p></div></div>
+    {current.length ? current.map(row) : <Empty>Starte eine Angebotsprüfung, um die aktuellen Ergebnisse zu sehen.</Empty>}
+    {history.length > 0 && <details className="offer-check-history"><summary>Frühere Prüfergebnisse ({history.length})</summary>
+      {history.slice(0, historyLimit).map(row)}
+      {history.length > historyLimit && <button type="button" className="button" onClick={() => setHistoryLimit((limit) => limit + 25)}>Ältere Prüfergebnisse anzeigen</button>}
+    </details>}
+  </section>;
+}
+
 function Dialog({ title, close, children, variant, active = true }: { title: string; close: () => void; children: ReactNode; variant?: "offer"; active?: boolean }) {
   useEffect(() => {
     if (!active) return;
@@ -521,7 +547,7 @@ function Editor({ kind, item, offers, sources, owners, channelOptions, busy, ai,
     {kind === "task" && <label className="form-field">Termin<input type="date" name="due" defaultValue={d?.due} /></label>}
     {kind === "campaign" && <div className="fields"><label className="form-field">Start<input type="date" name="start" defaultValue={d?.start} /></label><label className="form-field">Ende<input type="date" name="due" defaultValue={d?.due} /></label></div>}
     {["content", "campaign"].includes(kind) && <label className="form-field">Angebot<select name="related" defaultValue={d?.related ?? ""}><option value="">Ohne Zuordnung</option>{offers.map((o) => <option key={o.id} value={o.id}>{o.data.title}</option>)}</select></label>}
-    {(kind === "campaign" || kind === "agency") && <div className="fields"><MoneyField name="amount" label="Budget (€)" value={d?.amount} />{kind === "agency" && <MoneyField name="actual" label="Ist-Kosten (€)" value={d?.actual} />}</div>}
+    {(kind === "campaign" || kind === "agency") && <div className="fields"><MoneyField name="amount" label="Budget (€)" value={d?.amount} />{kind === "agency" && <MoneyField name="actual" label="Ist-Kosten (€)" value={d?.actual} required={false} />}</div>}
     {kind === "campaign" && <><label className="form-field">Zieladresse (HTTPS)<input name="url" type="url" value={target} onChange={(e) => { setTarget(e.target.value); setCopied(false); }} /></label>
       {tracking && <div className="tracking-row"><label className="form-field">UTM-Tracking-Link<input value={tracking} readOnly onFocus={(e) => e.currentTarget.select()} /></label><button className="button" type="button" onClick={() => navigator.clipboard.writeText(tracking).then(() => setCopied(true)).catch(() => setCopied(false))}>{copied ? "Kopiert" : "Link kopieren"}</button></div>}</>}
     {kind === "campaign" && <fieldset className="campaign-rules-fields"><legend>Automatische Aufgaben</legend>

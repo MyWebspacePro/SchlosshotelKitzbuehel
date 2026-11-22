@@ -10,6 +10,13 @@ import { importFields, type Dataset } from "../lib/import-fields";
 type ImportRow = Record<string, string>;
 const numericFields = ["visits", "starts", "bookings", "revenue", "cost", "occupancy", "expected", "observed", "stars", "amount", "actual"];
 
+function decimalCell(value: string) {
+  if (/^\d+(?:[.,]\d+)?$/.test(value)) return value.replace(",", ".");
+  if (/^\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(value)) return value.replaceAll(".", "").replace(",", ".");
+  if (/^\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(value)) return value.replaceAll(",", "");
+  return "";
+}
+
 function csvCells(input: string) {
   const raw = input.replace(/^\uFEFF/, "").trim();
   const delimiter = raw.split(/\r?\n/, 1)[0].includes(";") ? ";" : ",";
@@ -49,8 +56,9 @@ async function readRows(file: File, dataset: Dataset): Promise<ImportRow[]> {
     const row = Object.fromEntries(fields.map((field, j) => [field, (line[indexes[j]] ?? "").trim()])) as ImportRow;
     for (const key of fields.filter((field) => numericFields.includes(field))) {
       const value = row[key];
-      row[key] = value.includes(",") ? value.replaceAll(".", "").replace(",", ".") : value;
-      if (!/^\d+(\.\d+)?$/.test(row[key]) || !Number.isFinite(Number(row[key]))) throw new Error("Zeile " + (i + 2) + " hat eine ungültige Zahl in " + titles[fields.indexOf(key)] + ".");
+      if (dataset === "agency" && key === "actual" && !value) continue;
+      row[key] = decimalCell(value);
+      if (!row[key] || !Number.isFinite(Number(row[key]))) throw new Error("Zeile " + (i + 2) + " hat eine ungültige Zahl in " + titles[fields.indexOf(key)] + ".");
     }
     const key = dataset === "metrics" ? row.day + "|" + row.channel : dataset === "agency" ? row.id : (row.source ?? row.channel ?? "") + "|" + row.id;
     if (dataset === "metrics") {
