@@ -236,7 +236,7 @@ export default function Cockpit() {
               try { await sendAuth({ action: "logout" }); location.reload(); }
               catch (error) { setProblem(error instanceof Error ? error.message : "Abmelden fehlgeschlagen."); }
             }}><LogOut size={16} /><span>Abmelden</span></button></> :
-            <button className="button auth-action" aria-label="Team anmelden" onClick={() => open({ type: "login" })}><LogIn size={16} /><span>Team anmelden</span></button>}
+            <button className="button auth-action" aria-label="Anmelden" onClick={() => open({ type: "login" })}><LogIn size={16} /><span>Anmelden</span></button>}
         </div>
       </header>
       <main>
@@ -381,7 +381,7 @@ export default function Cockpit() {
       </main>
     </div>
     {modal && <Dialog close={closeModal} active={!pendingDelete} variant={offerBeingEdited ? "offer" : undefined}
-      title={modal.type === "edit" ? (modal.item ? editorLabel + " bearbeiten" : editorLabel === "Eintrag" ? "Neuer Eintrag" : editorLabel + " anlegen") : modal.type === "import" ? "Daten importieren" : modal.type === "search" ? "Arbeitsbereich durchsuchen" : modal.type === "login" ? "Team anmelden" : "Bericht erstellen"}>
+      title={modal.type === "edit" ? (modal.item ? editorLabel + " bearbeiten" : editorLabel === "Eintrag" ? "Neuer Eintrag" : editorLabel + " anlegen") : modal.type === "import" ? "Daten importieren" : modal.type === "search" ? "Arbeitsbereich durchsuchen" : modal.type === "login" ? "Anmelden" : "Bericht erstellen"}>
       {problem && <div className="notice error" role="alert">{problem}</div>}
       {modal.type === "login" && <SignIn onCancel={closeModal} />}
       {campaignBeingEdited && <div className="inline-actions campaign-management">
