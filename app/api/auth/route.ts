@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AuthenticationError, login, logout, saveAccount, throttleAuth, TooManyAttempts } from "../../../lib/accounts";
+import { AuthenticationError, login, logout, resolveAccess, saveAccount, throttleAuth, TooManyAttempts } from "../../../lib/accounts";
 import { PasswordServiceBusy } from "../../../lib/passwords";
 import { InputError } from "../../../lib/store";
-import { authenticationCookie, requestAccess, requestAddress, setAuthenticationCookie, setWorkspaceCookie, validRequestOrigin, workspaceCookie } from "../../../lib/workspace-cookie";
+import { authenticationCookie, guestResumeCookie, requestAccess, requestAddress, setAuthenticationCookie, setGuestResumeCookie, setWorkspaceCookie, validRequestOrigin } from "../../../lib/workspace-cookie";
 
 export const runtime = "nodejs";
 const send = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -18,10 +18,17 @@ export async function POST(request: NextRequest) {
     if (!body || typeof body !== "object") return send({ error: "Die Eingabe ist ungültig." }, 400);
 
     if (body.action === "logout" || body.action === "guest") {
+      const access = body.action === "logout" ? await requestAccess(request) : await resolveAccess(guestResumeCookie(request), undefined);
       await logout(authenticationCookie(request));
       const response = send({ ok: true });
       setAuthenticationCookie(response, "");
-      if (body.action === "guest" && workspaceCookie(request)) setWorkspaceCookie(response, "");
+      if (body.action === "guest") {
+        setWorkspaceCookie(response, access?.role === "guest" ? access.id : "");
+        setGuestResumeCookie(response, "");
+      } else if (access?.role === "guest") {
+        setGuestResumeCookie(response, access.id);
+        setWorkspaceCookie(response, "");
+      }
       return response;
     }
     if (body.action === "login" || body.action === "account") {
@@ -35,6 +42,7 @@ export async function POST(request: NextRequest) {
       if (result.token) {
         setAuthenticationCookie(response, result.token);
         setWorkspaceCookie(response, result.workspace);
+        setGuestResumeCookie(response, "");
       }
       return response;
     }

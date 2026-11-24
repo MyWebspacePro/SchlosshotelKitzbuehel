@@ -405,17 +405,22 @@ footer { display: flex; gap: 12px; flex-wrap: wrap; justify-content: space-betwe
 .review-original p { white-space:pre-wrap; margin:7px 0 0; overflow-wrap:anywhere; }
 
 .settings-account { width:100%; }
-.identity-name { max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--wine); font-size:12px; font-weight:650; }
+.profile-menu { position:relative; flex:none; }
+.profile-avatar { display:grid; place-items:center; width:36px; height:36px; border:1px solid var(--wine); border-radius:50%; background:var(--wine); color:white; font-size:12px; font-weight:700; letter-spacing:.04em; cursor:pointer; }
+.profile-avatar:hover, .profile-avatar[aria-expanded="true"] { background:#723653; }
+.profile-avatar:focus-visible, .profile-action:focus-visible { outline:2px solid var(--wine); outline-offset:3px; }
+.profile-panel { position:absolute; top:calc(100% + 10px); right:0; width:min(240px, calc(100vw - 24px)); padding:5px; border:1px solid var(--line); border-radius:12px; background:#fffdfb; box-shadow:0 12px 32px #32132220; }
+.profile-name { display:grid; gap:2px; padding:9px 10px 10px; margin-bottom:3px; border-bottom:1px solid var(--line); overflow-wrap:anywhere; }
+.profile-name small { color:var(--muted); }
+.profile-action { display:flex; align-items:center; gap:8px; width:100%; padding:9px 10px; border:0; border-radius:7px; background:transparent; color:inherit; text-align:left; font-size:13px; cursor:pointer; }
+.profile-action:hover { background:var(--paper); }
+.profile-action:disabled { opacity:.55; cursor:default; }
+.profile-logout { color:var(--wine); }
 .auth-screen { display:grid; place-items:center; min-height:100dvh; padding:18px; }
 .auth-card { width:min(100%,445px); padding:25px; }
 .auth-card img { width:145px; max-height:72px; object-fit:contain; margin-bottom:14px; }
 .auth-card h1 { margin:0 0 16px; font:600 clamp(25px,6vw,37px)/1.1 Georgia,serif; color:var(--wine); }
 .auth-form .inline-actions { margin-top:14px; }
-@media (max-width:600px) {
-  .identity-name { display:none; }
-  .auth-action span { display:none; }
-  .auth-action { min-width:36px; padding-inline:8px; }
-}
 
 .report-catalog { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,168px),1fr)); gap:12px; margin-bottom:22px; }
 .report-type-card { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-content:start; padding:15px; text-align:left; }

@@ -4,11 +4,19 @@ import { resolveAccess, sessionSeconds, throttleAuth } from "./accounts";
 
 const workspaceName = "schlosshotel_workspace";
 const sessionName = "schlosshotel_session";
+const guestResumeName = "schlosshotel_guest_resume";
 const cookieOptions = { httpOnly: true, sameSite: "lax" as const, path: "/", secure: process.env.SECURE_COOKIES === "1" };
+const workspaceSeconds = 60 * 60 * 24 * 30;
+const workspaceIdPattern = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/;
 
 export function workspaceCookie(request: NextRequest) {
   const id = request.cookies.get(workspaceName)?.value;
-  return id && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(id) ? id : undefined;
+  return id && workspaceIdPattern.test(id) ? id : undefined;
+}
+
+export function guestResumeCookie(request: NextRequest) {
+  const id = request.cookies.get(guestResumeName)?.value;
+  return id && workspaceIdPattern.test(id) ? id : undefined;
 }
 
 export function authenticationCookie(request: NextRequest) {
@@ -20,7 +28,7 @@ export async function requestAccess(request: NextRequest, create = false) {
   const guest = workspaceCookie(request);
   const token = authenticationCookie(request);
   const access = await resolveAccess(guest, token);
-  if (access || guest || token || !create) return access;
+  if (access || guest || token || guestResumeCookie(request) || !create) return access;
   await throttleAuth("guest-workspace:" + requestAddress(request), 30);
   return { id: randomUUID(), role: "guest" as const };
 }
@@ -39,7 +47,11 @@ export function validRequestOrigin(request: NextRequest) {
 }
 
 export function setWorkspaceCookie(response: NextResponse, id: string) {
-  response.cookies.set(workspaceName, id, { ...cookieOptions, maxAge: id ? 60 * 60 * 24 * 30 : 0 });
+  response.cookies.set(workspaceName, id, { ...cookieOptions, maxAge: id ? workspaceSeconds : 0 });
+}
+
+export function setGuestResumeCookie(response: NextResponse, id: string) {
+  response.cookies.set(guestResumeName, id, { ...cookieOptions, maxAge: id ? workspaceSeconds : 0 });
 }
 
 export function setAuthenticationCookie(response: NextResponse, token: string) {

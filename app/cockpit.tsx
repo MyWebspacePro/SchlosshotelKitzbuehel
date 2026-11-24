@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import {
   Activity, ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, BarChart3, CalendarDays,
   Check, ChevronDown, CircleAlert, ClipboardList, Download, Euro, Globe, Image as ImageIcon,
-  LayoutGrid, LineChart, Link2, LogIn, LogOut, Megaphone, Menu, MessageSquare, MousePointer2,
+  LayoutGrid, LineChart, Link2, Megaphone, Menu, MessageSquare, MousePointer2,
   Plus, RefreshCw, Search, Settings, Sparkles, Star, X
 } from "lucide-react";
 import ContentStudio, { contentFormat, type ContentFormat } from "./content-studio";
@@ -15,7 +15,7 @@ import OfferEditor from "./offer-editor";
 import ReportView from "./report-view";
 import { ReportCatalog, ReportCreation } from "./report-creation";
 import { reportTitle, type ReportKind } from "../lib/report";
-import { sendAuth, SignIn } from "./team-access";
+import { ProfileMenu, SignIn } from "./team-access";
 import MetricImport from "./metric-import";
 import type { Dataset } from "../lib/import-fields";
 import { websitePages } from "../lib/website";
@@ -209,7 +209,7 @@ export default function Cockpit() {
   const identity = data?.identity;
 
   if (locked) return <main className="auth-screen"><section className="card auth-card">
-    <img src="/brand/logo.svg" alt="Schlosshotel Kitzbühel" /><h1>Team-Arbeitsbereich</h1>
+    <img src="/brand/logo.svg" alt="Schlosshotel Kitzbühel" /><h1>Anmelden</h1>
     <SignIn locked />
   </section></main>;
 
@@ -230,12 +230,7 @@ export default function Cockpit() {
       <header className="topbar">
         <div className="breadcrumb"><button className="icon-button menu-toggle" aria-label="Menü öffnen" onClick={() => setMenu(true)}><Menu size={21} /></button><span className="crumb-root">Arbeitsbereich</span><span className="slash">/</span><strong>{area.label}</strong></div>
         <div className="header-actions"><button className="icon-button" aria-label="Suchen" onClick={() => open({ type: "search" })}><Search size={19} /></button>
-          {identity && identity.role !== "guest" ? <><span className="identity-name" title={identity.username}>{identity.name}</span>
-            <button className="button auth-action" aria-label="Abmelden" onClick={async () => {
-              try { await sendAuth({ action: "logout" }); location.reload(); }
-              catch (error) { setProblem(error instanceof Error ? error.message : "Abmelden fehlgeschlagen."); }
-            }}><LogOut size={16} /><span>Abmelden</span></button></> :
-            <button className="button auth-action" aria-label="Anmelden" onClick={() => open({ type: "login" })}><LogIn size={16} /><span>Anmelden</span></button>}
+          {identity && <ProfileMenu identity={identity} onProblem={setProblem} onSignIn={() => open({ type: "login" })} />}
         </div>
       </header>
       <main>

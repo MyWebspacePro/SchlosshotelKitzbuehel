@@ -100,6 +100,14 @@ const isolated = await outsider.send("/api/workspace");
 assert.equal(isolated.identity.role, "guest");
 assert.ok(!isolated.records.some((record) => record.data.title === uniqueTask));
 await outsider.send(pdf, {}, 404);
+const guestWorkspace = outsider.cookies.get("schlosshotel_workspace");
+await post(outsider, "/api/auth", { action: "logout" });
+assert.equal(outsider.cookies.has("schlosshotel_workspace"), false);
+await outsider.send("/api/workspace", {}, 401);
+await post(outsider, "/api/workspace", { action: "report" }, 401);
+await post(outsider, "/api/auth", { action: "guest" });
+assert.equal((await outsider.send("/api/workspace")).identity.role, "guest");
+assert.equal(outsider.cookies.get("schlosshotel_workspace"), guestWorkspace);
 
 await post(root, "/api/auth", { action: "account", owner: "team-content", username: member, password: newPassword });
 await worker.send("/api/workspace", {}, 401);
