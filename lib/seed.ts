@@ -23,7 +23,14 @@ export function feed(channel: string): Metric[] {
 
 const reviewDate = (daysAgo: number) => new Date(Date.now() - daysAgo * 86400000).toISOString().slice(0, 10);
 
+export const additionalOffers: Array<[string, Kind, Data]> = [
+  ["o4", "offer", { title: "Skiwochenende zu zweit", status: "Zu prüfen", description: "Zwei Nächte im Doppelzimmer mit Frühstück.", image: "/brand/schlosshotel.webp", source: "HNS", start: "2027-02-05", due: "2027-02-07", room: "Doppelzimmer", occupancy: 2, tariff: "Frühstück", expected: 680, observed: 680, availability: true, observedAvailability: true }],
+  ["o5", "offer", { title: "Wellness im Frühling", status: "Zu prüfen", description: "Zwei Nächte mit Frühstück und Zeit im Spa.", image: "/brand/spa.webp", source: "RateBoard", start: "2027-03-19", due: "2027-03-21", room: "Doppelzimmer", occupancy: 2, tariff: "Frühstück", expected: 540, observed: 560, availability: true, observedAvailability: true }],
+  ["o6", "offer", { title: "Suite mit Bergblick", status: "Zu prüfen", description: "Drei Nächte in der Suite für zwei Personen inklusive Frühstück.", image: "/brand/suite.webp", source: "HNS", start: "2027-04-09", due: "2027-04-12", room: "Suite", occupancy: 2, tariff: "Frühstück", expected: 1190, observed: 1190, availability: true, observedAvailability: false }],
+];
+
 export const examples: Array<[string, Kind, Data]> = [
+  ...additionalOffers,
   ["t1", "task", { title: "Winterangebot in der Buchungsstrecke prüfen", status: "Offen", description: "Die in HNS importierte Rate weicht vom veröffentlichten Angebot ab. Nach der Korrektur den Angebotscheck erneut ausführen.", owner: "Digital Marketing", channel: "Direktvertrieb", related: "o1" }],
   ["t2", "task", { title: "November-Newsletter freigeben", status: "In Arbeit", description: "Angebotsdaten, Markenstil und Linkziel für den Versand prüfen.", owner: "Marketing", channel: "Content", related: "c1" }],
   ["t3", "task", { title: "Monatsbericht mit Agentur abstimmen", status: "Offen", description: "Google Ads und Hotel Ads nach Kosten pro Buchung vergleichen.", owner: "Digital Marketing", channel: "Controlling" }],

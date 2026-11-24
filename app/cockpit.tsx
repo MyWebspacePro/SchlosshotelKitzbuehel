@@ -375,7 +375,7 @@ export default function Cockpit() {
               {records.filter((r) => r.kind === "profile").map((r) => <div key={r.id} className="profile-row"><RecordRow item={r} onClick={() => open({ type: "edit", kind: "profile", item: r })} /><button className="button" disabled={busy || !brand} onClick={() => action({ action: "profile-check", id: r.id }, "Portalprofil abgeglichen.")}>Abgleichen</button></div>)}
               {!brand && <Empty>Lege zuerst die zentralen Markenangaben für den Abgleich fest.</Empty>}
             </section>}
-            {page === "offer" && <OfferCheckResults records={records} offers={offers} />}
+            {page === "offer" && <OfferCheckResults records={records} offers={offers} onEdit={(item) => open({ type: "edit", kind: "offer", item })} />}
             {page === "offer" && <section className="card panel table-card">
               <div className="card-heading"><div><h3>Website- und SEO-Check</h3><p>Prüft öffentliche Seiten auf den HTTP-Status, Seitentitel, H1, Meta-Beschreibung und vorhandene Buchungslinks.</p></div></div>
               <div className="site-actions"><label className="form-field">Hotelseite<select value={siteUrl} onChange={(e) => setSiteUrl(e.target.value)}>
@@ -482,16 +482,18 @@ function OfferCard({ item, onClick }: { item: RecordItem; onClick: () => void })
   </button>;
 }
 
-function OfferCheckResults({ records, offers }: { records: RecordItem[]; offers: RecordItem[] }) {
+function OfferCheckResults({ records, offers, onEdit }: { records: RecordItem[]; offers: RecordItem[]; onEdit: (offer: RecordItem) => void }) {
   const [historyLimit, setHistoryLimit] = useState(25);
+  const offersById = new Map(offers.map((offer) => [offer.id, offer]));
   const latest = latestOfferChecks(records);
   const current = offers.flatMap((offer) => latest.get(offer.id) ?? []);
   const currentIds = new Set(current.map((result) => result.id));
   const history = records.filter((record) => record.kind === "check" && !currentIds.has(record.id));
 
   function row(result: RecordItem) {
+    const offer = offersById.get(result.data.related ?? "");
     return <div className="record-row static site-result" key={result.id}>
-      <div><strong>{result.data.title}</strong><small><time dateTime={result.updated_at}>{localTime(result.updated_at, "medium")}</time></small><p>{result.data.description}</p></div>
+      <div><strong>{offer ? <button className="text-button" aria-label={offer.data.title + " bearbeiten"} onClick={() => onEdit(offer)}>{offer.data.title}</button> : result.data.title}</strong><small><time dateTime={result.updated_at}>{localTime(result.updated_at, "medium")}</time></small><p>{result.data.description}</p></div>
       {pill(result.data.status)}
     </div>;
   }

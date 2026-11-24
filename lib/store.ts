@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { Pool, type QueryResultRow } from "pg";
 import { agencyChannels, availabilityLabel, brandImages, campaignRowsFor, channelCode, channels, connectionCategories, defaultChannelOptions, isCustomConnection, latestOfferChecks, offerComparison, ownerRoleOptions, priceEuro, sum, euro, type CampaignMetric, type ChannelOption, type ContentRevision, type Connection, type Data, type Kind, type MediaImage, type Metric, type OwnerOption, type RecordItem, type Schedule, type SlideCrop, type Workspace } from "./model";
-import { connectors, examples, feed } from "./seed";
+import { additionalOffers, connectors, examples, feed } from "./seed";
 import { checkWebsite } from "./website-check";
 import { createReportSnapshot, reportDescription, reportKinds, type ReportKind } from "./report";
 import { importFields, type Dataset } from "./import-fields";
@@ -72,6 +72,17 @@ const schema = `
   CREATE TABLE IF NOT EXISTS hotel_deleted_record (
     workspace uuid NOT NULL, id text NOT NULL, PRIMARY KEY (workspace,id)
   );
+  INSERT INTO hotel_record (workspace,id,kind,data)
+    SELECT w.id, offer.id, offer.kind, offer.data
+    FROM hotel_workspace w
+    CROSS JOIN jsonb_to_recordset($offers$${JSON.stringify(additionalOffers.map(([id, kind, data]) => ({ id, kind, data })))}$offers$::jsonb)
+      AS offer(id text, kind text, data jsonb)
+    WHERE w.ready AND EXISTS (
+      SELECT 1 FROM hotel_record r WHERE r.workspace=w.id AND r.kind='offer' AND r.id IN ('o1','o2','o3')
+    ) AND NOT EXISTS (
+      SELECT 1 FROM hotel_deleted_record d WHERE d.workspace=w.id AND d.id=offer.id
+    )
+    ON CONFLICT DO NOTHING;
 `;
 
 async function open(): Promise<Database> {
