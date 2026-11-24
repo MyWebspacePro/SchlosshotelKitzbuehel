@@ -793,7 +793,7 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
     const channel = map[connection.id];
     const metricRows = channel ? feed(channel) : ["analytics", "casablanca"].includes(connection.id) ? channels.flatMap(feed) : [];
     if (metricRows.length) await writeMetrics(query, id, metricRows, true);
-    const kindBySource: Record<string, Kind> = { booking: "review", google: "review", hns: "offer", rateboard: "offer", fairmas: "agency" };
+    const kindBySource: Record<string, Kind> = { booking: "review", google: "review", tripadvisor: "review", hns: "offer", rateboard: "offer", fairmas: "agency" };
     const kind = kindBySource[connection.id];
     const records = kind ? examples.filter(([, type, d]) => type === kind && (type !== "review" || d.channel === connection.name) &&
       (type !== "offer" || d.source === connection.name)) : [];

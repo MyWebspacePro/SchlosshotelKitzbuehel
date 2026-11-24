@@ -54,7 +54,7 @@ export function createReportSnapshot(state: Workspace, rows: Metric[], from: str
     name: data.title, owner: data.owner, status: data.status, budget: data.amount, actual: data.actual
   })).sort((a, b) => (b.actual ?? 0) - (a.actual ?? 0) || a.name.localeCompare(b.name, "de-AT")) };
   if (kind === "reviews") {
-    const all = state.records.filter((r) => r.kind === "review" && (!/^r[123]$/.test(r.id) ||
+    const all = state.records.filter((r) => r.kind === "review" && (!/^r(?:[1-9]\d*)$/.test(r.id) ||
       state.connections.some((source) => source.name === r.data.channel && source.mode === "example")));
     const aggregate = (entries: typeof all): ReviewFigures => entries.reduce((totals, { data }) => {
       totals.count++;

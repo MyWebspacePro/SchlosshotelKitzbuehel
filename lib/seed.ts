@@ -3,7 +3,7 @@ import { channels, type Data, type Kind, type Metric } from "./model";
 export const connectors = [
   ["ads", "Google Ads", "Kampagnen"], ["hotel-ads", "Google Hotel Ads", "Metasuche"],
   ["analytics", "Google Analytics 4", "Website"], ["search", "Google Search Console", "SEO"],
-  ["booking", "Booking.com", "Bewertungen"], ["google", "Google Unternehmensprofil", "Bewertungen"],
+  ["booking", "Booking.com", "Bewertungen"], ["google", "Google Unternehmensprofil", "Bewertungen"], ["tripadvisor", "Tripadvisor", "Bewertungen"],
   ["meta", "Meta Business", "Social Media"], ["newsletter", "Newsletter", "E-Mail"],
   ["casablanca", "Casablanca", "Hotelsystem"], ["hns", "HNS", "Buchungsdaten"],
   ["rateboard", "RateBoard", "Raten"], ["fairmas", "Fairmas", "Controlling"]
@@ -37,6 +37,18 @@ export const examples: Array<[string, Kind, Data]> = [
   ["r1", "review", { title: "Theresa M.", status: "Offen", description: "Der Spa und die Aussicht auf die Berge waren wunderschön. Beim Frühstück war das Team ausgesprochen aufmerksam.", stars: 5, channel: "Booking.com" }],
   ["r2", "review", { title: "Michael R.", status: "Offen", description: "Schönes Zimmer und ein sehr angenehmer Aufenthalt. Der Check-in hat an unserem Anreisetag etwas länger gedauert.", stars: 4, channel: "Google Unternehmensprofil" }],
   ["r3", "review", { title: "Julia K.", status: "Offen", description: "Wir haben das Wochenende sehr genossen. Die Lage ist ideal für einen Spaziergang nach Kitzbühel.", stars: 5, channel: "Google Unternehmensprofil" }],
+  ["r4", "review", {"title": "Claudia W.", "status": "Offen", "description": "Ein wunderbarer Aufenthalt. Besonders gefallen haben uns die ruhige Lage, der herzliche Empfang und der Blick auf die Berge.", "stars": 5, "channel": "Booking.com"}],
+  ["r5", "review", {"title": "Andreas S.", "status": "Offen", "description": "Das Zimmer war sehr gepflegt und das Frühstück abwechslungsreich. Am Abend hätten wir uns etwas mehr Zeit beim Service gewünscht.", "stars": 4, "channel": "Booking.com"}],
+  ["r6", "review", {"title": "Sophie L.", "status": "Offen", "description": "Wir haben uns von der Anreise bis zur Abreise wohlgefühlt. Der Spa-Bereich war nach einem Tag draußen genau das Richtige.", "stars": 5, "channel": "Booking.com"}],
+  ["r7", "review", {"title": "Daniel B.", "status": "Offen", "description": "Schöne Umgebung und freundliches Team. Unser Zimmer war bei der Ankunft noch nicht ganz fertig, das wurde aber rasch gelöst.", "stars": 3, "channel": "Booking.com"}],
+  ["r8", "review", {"title": "Petra H.", "status": "Offen", "description": "Sehr freundliche Gastgeber und ein wunderschönes Ambiente. Das Frühstück und die Aussicht bleiben uns besonders in Erinnerung.", "stars": 5, "channel": "Google Unternehmensprofil"}],
+  ["r9", "review", {"title": "Markus F.", "status": "Offen", "description": "Ein entspanntes Wochenende in Kitzbühel. Das Team war aufmerksam; beim Frühstück war es zeitweise etwas voll.", "stars": 4, "channel": "Google Unternehmensprofil"}],
+  ["r10", "review", {"title": "Elena P.", "status": "Offen", "description": "Tolle Lage, stilvolle Zimmer und eine sehr angenehme Atmosphäre. Wir kommen gerne wieder.", "stars": 5, "channel": "Google Unternehmensprofil"}],
+  ["r11", "review", {"title": "Thomas G.", "status": "Offen", "description": "Insgesamt ein schöner Aufenthalt. Die Wartezeit beim Check-in war länger als erwartet, das Personal blieb dabei freundlich.", "stars": 3, "channel": "Google Unternehmensprofil"}],
+  ["r12", "review", {"title": "Sabine K.", "status": "Offen", "description": "Ein besonderer Ort für eine kleine Auszeit. Die Kombination aus Bergblick, freundlichem Service und Ruhe hat uns begeistert.", "stars": 5, "channel": "Tripadvisor"}],
+  ["r13", "review", {"title": "Robert N.", "status": "Offen", "description": "Das Hotel ist ein guter Ausgangspunkt für Ausflüge. Unser Zimmer war komfortabel und das Frühstück hat uns gut gefallen.", "stars": 4, "channel": "Tripadvisor"}],
+  ["r14", "review", {"title": "Nina D.", "status": "Offen", "description": "Von der Begrüßung bis zum Abschied haben wir uns sehr willkommen gefühlt. Besonders schön war der entspannte Nachmittag im Spa.", "stars": 5, "channel": "Tripadvisor"}],
+  ["r15", "review", {"title": "Martin E.", "status": "Offen", "description": "Das Ambiente ist sehr schön. Beim Abendservice gab es eine längere Wartezeit; das Team hat sich danach aufmerksam um uns gekümmert.", "stars": 3, "channel": "Tripadvisor"}],
   ["a1", "agency", { title: "Performance Marketing", status: "Aktiv", description: "Kampagnenmanagement, monatliche Auswertung, Betreuung der Suchanzeigen.", channel: "Google Ads", amount: 4800, actual: 3190, owner: "Agenturteam" }],
   ["a2", "agency", { title: "Website und Tracking", status: "Aktiv", description: "Website-Pflege, Prüfung von Buchungslinks und Tracking-Ereignissen.", channel: "Website", amount: 2200, actual: 1640, owner: "Technikpartner" }],
   ["s1", "system", { title: "Buchungsereignisse abgleichen", status: "Offen", description: "Anbieterabstimmung für die Zuordnung abgeschlossener Buchungen zu Kampagnen.", source: "HNS", owner: "Digital Marketing" }]

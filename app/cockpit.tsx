@@ -53,7 +53,7 @@ const headings: Record<Exclude<Page, "home">, [string, string]> = {
   campaign: ["Kampagnen", "Plane Maßnahmen und vergleiche die Leistung deiner Vertriebskanäle."],
   offer: ["Website & Direktvertrieb", "Prüfe veröffentlichte Angebote gegen die Daten deiner Buchungsquellen."],
   content: ["Content-Studio", "Erstelle und prüfe Website-Angebote, Instagram-Carousels und Newsletter."],
-  review: ["Bewertungen", "Übernimm Gästebewertungen aus Google und Booking.com und bearbeite die Antworten."],
+  review: ["Bewertungen", "Übernimm Gästebewertungen aus deinen Portalen und bearbeite die Antworten."],
   task: ["Aufgaben", "Verfolge Auffälligkeiten, Freigaben und technische Maßnahmen."],
   report: ["Berichte", "Wähle einen Berichtstyp oder öffne einen gespeicherten Bericht."],
   agency: ["Agenturen & Budget", "Behalte vereinbarte Leistungen und Ausgaben im Blick."],
@@ -199,7 +199,7 @@ export default function Cockpit() {
     return [{ offer, difference }];
   });
   const visibleRecords = records.filter((r) => r.kind === page && (statusFilter === "Alle" || r.data.status === statusFilter) &&
-    (r.kind !== "review" || !/^r[123]$/.test(r.id) || sources.some((source) => source.name === r.data.channel && source.mode === "example")));
+    (r.kind !== "review" || !/^r(?:[1-9]\d*)$/.test(r.id) || sources.some((source) => source.name === r.data.channel && source.mode === "example")));
   const activeItem = draftFormat ? undefined : visibleRecords.find((r) => r.id === selected) ?? visibleRecords[0];
   const campaignBeingEdited = modal?.type === "edit" && modal.kind === "campaign" ? modal.item : undefined;
   const offerBeingEdited = modal?.type === "edit" && modal.kind === "offer";
@@ -513,7 +513,7 @@ function Editor({ kind, item, offers, sources, owners, channelOptions, busy, ai,
     const fields = Object.fromEntries(new FormData(e.currentTarget));
     save(kind === "agency" ? { ...fields, channels: selectedChannels } : fields);
   }}>
-    {kind === "review" ? <div className="review-original"><strong>{d?.title}</strong><span> · {[d?.channel, d?.stars && number(d.stars, 2) + " von 5", d?.source === "API" ? "Live-API" : d?.source === "Dateiimport" ? "Dateiimport" : /^r[123]$/.test(item?.id ?? "") ? "Beispieldaten" : ""].filter(Boolean).join(" · ")}</span>{d?.description && <p>{d.description}</p>}</div>
+    {kind === "review" ? <div className="review-original"><strong>{d?.title}</strong><span> · {[d?.channel, d?.stars && number(d.stars, 2) + " von 5", d?.source === "API" ? "Live-API" : d?.source === "Dateiimport" ? "Dateiimport" : ""].filter(Boolean).join(" · ")}</span>{d?.description && <p>{d.description}</p>}</div>
       : <label className="form-field">{kind === "brand" ? "Markenname" : kind === "profile" ? "Name im Portal" : kind === "agency" ? "Name der Agentur" : "Titel"}<input name="title" defaultValue={d?.title ?? (kind === "brand" ? "Schlosshotel Kitzbühel" : undefined)} maxLength={120} required autoFocus onChange={kind === "campaign" ? (e) => { setCampaignName(e.target.value); setCopied(false); } : undefined} /></label>}
     <div className="fields"><label className="form-field">Status<select name="status" defaultValue={d?.status ?? options[0]}>{options.map((s) => <option key={s}>{s}</option>)}</select></label>
     {["system", "profile"].includes(kind) ? <Choice label={kind === "profile" ? "Portal" : "Quelle"} name="source" value={d?.source} required
