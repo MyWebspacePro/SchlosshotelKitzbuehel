@@ -427,6 +427,7 @@ async function importRecords(query: Query, workspace: string, dataset: Exclude<D
         if (importSources.get(origin) !== "Bewertungen") throw new InputError("Wähle ein für den Import verfügbares Bewertungsportal.");
         data.channel = origin;
         data.source = "Dateiimport";
+        if (row.receivedAt) data.receivedAt = date(row.receivedAt);
         data.description = text(row.description, "Bewertung");
         data.stars = amount(row.stars, "Sterne", true);
         if (data.stars < 1 || data.stars > 5 || !data.description) throw new InputError("Bewertungstext und 1 bis 5 Sterne sind erforderlich.");
@@ -779,7 +780,7 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
         const description = row.comment.trim().slice(0, 2400);
         const status = prior?.status === "Freigegeben" && (prior.description !== description || prior.stars !== row.score) ? "Entwurf" : prior?.status ?? "Offen";
         return { id: recordId, data: { ...prior, title: row.name.slice(0, 120), description, stars: row.score, status,
-          channel: connection.name, source: "API", response: prior?.response ?? row.replied?.slice(0, 2400) } };
+          channel: connection.name, source: "API", receivedAt: row.receivedAt ?? prior?.receivedAt, response: prior?.response ?? row.replied?.slice(0, 2400) } };
       });
       if (rows.length) await query(`INSERT INTO hotel_record (workspace,id,kind,data)
         SELECT $1,row.id,'review',row.data FROM jsonb_to_recordset($2::jsonb) AS row(id text,data jsonb)

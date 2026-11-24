@@ -13,9 +13,9 @@ export const importFields = {
   },
   reviews: {
     label: "Bewertungen",
-    fields: ["id", "channel", "title", "stars", "description"],
-    titles: ["Referenz", "Portal", "Absender", "Sterne", "Bewertung"],
-    example: ["beispiel-103", "Booking.com", "A. Gast", "5", "Wir hatten eine schöne Winterauszeit."]
+    fields: ["id", "channel", "title", "stars", "description", "receivedAt"],
+    titles: ["Referenz", "Portal", "Absender", "Sterne", "Bewertung", "Bewertungsdatum"],
+    example: ["beispiel-103", "Booking.com", "A. Gast", "5", "Wir hatten eine schöne Winterauszeit.", "2026-11-20"]
   },
   agency: {
     label: "Agenturleistungen und Budgets",

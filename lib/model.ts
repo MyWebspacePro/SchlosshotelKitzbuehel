@@ -21,7 +21,7 @@ export type Data = {
   title: string; status: string; description: string; owner?: string; ownerId?: string; channel?: string;
   channels?: string[]; importReference?: string;
   due?: string; amount?: number; actual?: number; expected?: number; observed?: number;
-  stars?: number; url?: string; response?: string; source?: string; related?: string; image?: string;
+  stars?: number; receivedAt?: string; url?: string; response?: string; source?: string; related?: string; image?: string;
   format?: "instagram" | "newsletter" | "website"; slides?: Slide[]; newsletter?: Newsletter; websiteCard?: WebsiteCard;
   campaign?: string; start?: string; threshold?: number; briefLead?: number;
   room?: string; occupancy?: number; tariff?: string; availability?: boolean; observedAvailability?: boolean;

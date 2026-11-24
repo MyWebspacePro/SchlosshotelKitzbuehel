@@ -201,9 +201,10 @@ export default function Cockpit() {
   });
   const visibleRecords = records.filter((r) => r.kind === page && (statusFilter === "Alle" || r.data.status === statusFilter) &&
     (r.kind !== "review" || !/^r(?:[1-9]\d*)$/.test(r.id) || sources.some((source) => source.name === r.data.channel && source.mode === "example")));
+  const sortedReviews = page === "review" ? [...visibleRecords].sort((a, b) => (b.data.receivedAt ?? "").localeCompare(a.data.receivedAt ?? "") || a.id.localeCompare(b.id)) : visibleRecords;
   const reviewPages = Math.max(1, Math.ceil(visibleRecords.length / 10));
   const currentReviewPage = Math.min(reviewPage, reviewPages);
-  const listedRecords = page === "review" ? visibleRecords.slice((currentReviewPage - 1) * 10, currentReviewPage * 10) : visibleRecords;
+  const listedRecords = page === "review" ? sortedReviews.slice((currentReviewPage - 1) * 10, currentReviewPage * 10) : visibleRecords;
   const activeItem = draftFormat ? undefined : visibleRecords.find((r) => r.id === selected) ?? visibleRecords[0];
   const campaignBeingEdited = modal?.type === "edit" && modal.kind === "campaign" ? modal.item : undefined;
   const offerBeingEdited = modal?.type === "edit" && modal.kind === "offer";
@@ -451,6 +452,7 @@ function RecordRow({ item, onClick, current, channelOptions = [] }: { item: Reco
   const detail = [
     item.kind === "agency" ? agencyChannels(d).map((code) => channelLabel(code, channelOptions)).join(", ") || d.owner :
       d.channel ? channelLabel(d.channel, channelOptions) : d.source || d.owner,
+    item.kind === "review" && d.receivedAt ? new Intl.DateTimeFormat("de-AT", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(d.receivedAt)) : "",
     d.due && short(d.due),
     d.amount !== undefined && "Budget " + euro(d.amount),
     d.actual !== undefined && "Ist " + euro(d.actual),

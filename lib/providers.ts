@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import type { Connection } from "./model";
 
-type ExternalReview = { id: string; name: string; score: number; comment: string; replied?: string };
+type ExternalReview = { id: string; name: string; score: number; comment: string; replied?: string; receivedAt?: string };
 type ProviderImport = { reviews: ExternalReview[]; summary: string };
-type GoogleReview = { reviewId: string; starRating: string; comment?: string; reviewer?: { displayName?: string }; reviewReply?: { comment?: string } };
+type GoogleReview = { createTime?: string; reviewId: string; starRating: string; comment?: string; reviewer?: { displayName?: string }; reviewReply?: { comment?: string } };
 type BookingReview = { review_id: string; reviewer?: { name?: string }; scoring?: { review_score?: number };
   content?: { headline?: string; positive?: string; negative?: string }; reply?: { text?: string } };
 const googleScores: Record<string, number> = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 };
@@ -77,7 +77,7 @@ export async function importProvider(tag: string, connection: Connection): Promi
       for (const row of batch.reviews ?? []) {
         const score = googleScores[row.starRating];
         if (row.reviewId && score) reviews.push({ id: row.reviewId, name: row.reviewer?.displayName || "Anonymer Gast", score,
-          comment: row.comment ?? "", replied: row.reviewReply?.comment });
+          comment: row.comment ?? "", replied: row.reviewReply?.comment, receivedAt: row.createTime && !Number.isNaN(Date.parse(row.createTime)) ? new Date(row.createTime).toISOString().slice(0, 10) : undefined });
       }
       more = Boolean(batch.nextPageToken);
       if (!batch.nextPageToken) break;

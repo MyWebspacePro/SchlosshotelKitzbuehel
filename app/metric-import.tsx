@@ -48,7 +48,7 @@ async function readRows(file: File, dataset: Dataset): Promise<ImportRow[]> {
   const indexes = fields.map((field, i) => header.findIndex((name) => name === field.toLowerCase() || name === titles[i].toLowerCase() ||
     (dataset === "agency" && field === "channel" && (name === "kanal" || name === "channels")) ||
     (dataset === "agency" && field === "title" && name === "leistung")));
-  if (indexes.includes(-1)) throw new Error("Die Datei benötigt diese Spalten · " + titles.join(", "));
+  if (indexes.some((index, i) => index === -1 && !(dataset === "reviews" && fields[i] === "receivedAt"))) throw new Error("Die Datei benötigt diese Spalten · " + titles.filter((_, i) => !(dataset === "reviews" && fields[i] === "receivedAt")).join(", "));
   const rows = cells.filter((line) => line.some(Boolean));
   if (!rows.length || rows.length > 3000) throw new Error("Die Datei muss zwischen 1 und 3.000 Datenzeilen enthalten.");
   const seen = new Set<string>();
