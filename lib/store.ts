@@ -535,6 +535,7 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
   const state = await readWorkspace(query, id);
   const item = state.records.find((r) => r.id === body.id);
   if (body.action === "owner-setting") {
+    if (body.id === undefined) throw new InputError("Neue Personen benötigen ein Benutzerkonto.");
     await saveOwner(query, id, body, state.owners);
   } else if (body.action === "connection-setting") {
     const connection = state.connections.find((entry) => entry.id === body.id);

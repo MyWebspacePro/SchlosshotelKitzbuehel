@@ -396,10 +396,6 @@ footer { display: flex; gap: 12px; flex-wrap: wrap; justify-content: space-betwe
 .settings-row small { display:block; color:var(--muted); overflow-wrap:anywhere; }
 .settings-row > div:first-child { min-width:0; }
 .settings-form { display:grid; gap:8px; }
-.person-account-toggle { display:flex; align-items:center; gap:8px; width:fit-content; cursor:pointer; }
-.person-account-toggle input { accent-color:var(--wine); }
-.person-account-fields { min-width:0; padding:0 11px 8px; border:1px solid var(--line); border-radius:8px; }
-.person-account-fields legend { padding-inline:5px; color:var(--wine); font-weight:650; }
 .settings-row form { width:100%; }
 .settings-admin { padding-top:10px; border-top:1px solid var(--line); }
 .settings-admin summary { cursor:pointer; color:var(--wine); font-weight:650; }

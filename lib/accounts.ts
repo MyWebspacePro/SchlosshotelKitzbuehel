@@ -116,8 +116,8 @@ export async function saveAccount(access: Access, ownerValue: unknown, usernameV
       if (!admin.rows.length) throw new AuthenticationError();
     }
     const owner = personChange ? await saveOwner(query, access.id, { id: ownerValue, ...personChange }) : ownerValue as string;
-    const person = await query("SELECT 1 FROM hotel_owner WHERE workspace=$1 AND id=$2 AND active", [access.id, owner]);
-    if (!person.rows.length) throw new InputError("Wähle eine aktive Person aus der Liste.");
+    const person = (await query<{ active: boolean }>("SELECT active FROM hotel_owner WHERE workspace=$1 AND id=$2", [access.id, owner])).rows[0];
+    if (!person || (!person.active && (access.role === "guest" || !personChange))) throw new InputError("Wähle eine aktive Person aus der Liste.");
     const existing = (await query<AccountSummary>("SELECT owner,username,admin FROM hotel_account WHERE workspace=$1 AND owner=$2", [access.id, owner])).rows[0];
     if (!existing && !passwordHash) throw new InputError("Lege ein Passwort für das neue Konto fest.");
 

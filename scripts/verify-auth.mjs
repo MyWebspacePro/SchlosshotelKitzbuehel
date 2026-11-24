@@ -85,6 +85,8 @@ assert.deepEqual(Buffer.from(await imageBytes.arrayBuffer()), await readFile(new
 
 await post(root, "/api/auth", { action: "person-account", name: "Doppelter Zugang " + unique, role: "Marketing", username: admin, password: memberPassword }, 400);
 assert.ok(!(await root.send("/api/workspace")).owners.some((person) => person.name === "Doppelter Zugang " + unique));
+await post(root, "/api/auth", { action: "person-account", name: "Fehlendes Passwort " + unique, role: "Marketing", username: member }, 400);
+assert.ok(!(await root.send("/api/workspace")).owners.some((person) => person.name === "Fehlendes Passwort " + unique));
 await post(root, "/api/auth", { action: "person-account", owner: "team-content", name: "Content Teammitglied " + unique,
   role: "Content & Redaktion", username: member, password: memberPassword });
 await post(worker, "/api/auth", { action: "login", username: member.toUpperCase(), password: memberPassword });
@@ -124,6 +126,8 @@ await post(worker, "/api/auth", { action: "logout" });
 await replay.send("/api/workspace", {}, 401);
 await post(worker, "/api/auth", { action: "login", username: member, password: newPassword });
 await post(root, "/api/workspace", { action: "owner-setting", id: "team-content", active: false });
+await post(root, "/api/auth", { action: "person-account", owner: "team-content", name: "Inaktives Teammitglied " + unique, role: "Content & Redaktion", username: member });
+assert.equal((await root.send("/api/workspace")).owners.find((person) => person.id === "team-content").active, false);
 await worker.send("/api/workspace", {}, 401);
 await post(worker, "/api/auth", { action: "login", username: member, password: newPassword }, 401);
 await post(root, "/api/workspace", { action: "owner-setting", id: "team-marketing", active: false }, 400);
