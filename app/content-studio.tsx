@@ -139,10 +139,9 @@ export default function ContentStudio({ item, format, offers, campaigns, revisio
           <label className="form-field">Zieladresse (HTTPS)<input type="url" value={mail.url} maxLength={500} onChange={(e) => patchMail({ url: e.target.value })} /></label>
         </>}
         <div className="inline-actions">
-          <button className="button" disabled={!generate || busy || dirty || !ai} onClick={generate}><Sparkles size={16} /> KI-Text entwerfen</button>
-          {!ai && <button className="button" disabled={!generate || busy || dirty} onClick={generate}>Textvorlage anwenden</button>}
+          <button className="button" disabled={!generate || busy || dirty} onClick={generate}>{ai ? <><Sparkles size={16} /> KI-Text entwerfen</> : "Textvorlage anwenden"}</button>
         </div>
-        {!ai ? <p className="form-help">OpenAI-Zugang für KI-Entwürfe fehlt.</p> : (!generate || dirty) && <p className="form-help">Speichere den Beitrag zuerst.</p>}
+        {(!generate || dirty) && <p className="form-help">Speichere den Beitrag zuerst.</p>}
       </div>
       <aside className="studio-preview">
         <div className="preview-top"><span>Vorschau</span><span>{format === "instagram" ? active + 1 + " / " + slides.length : "E-Mail"}</span></div>

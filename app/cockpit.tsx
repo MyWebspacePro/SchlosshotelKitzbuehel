@@ -230,7 +230,6 @@ export default function Cockpit() {
       <header className="topbar">
         <div className="breadcrumb"><button className="icon-button menu-toggle" aria-label="Menü öffnen" onClick={() => setMenu(true)}><Menu size={21} /></button><span className="crumb-root">Arbeitsbereich</span><span className="slash">/</span><strong>{area.label}</strong></div>
         <div className="header-actions"><button className="icon-button" aria-label="Suchen" onClick={() => open({ type: "search" })}><Search size={19} /></button>
-          <span className="demo-chip"><i /> Beispieldaten</span>
           {identity && identity.role !== "guest" ? <><span className="identity-name" title={identity.username}>{identity.name}</span>
             <button className="button auth-action" aria-label="Abmelden" onClick={async () => {
               try { await sendAuth({ action: "logout" }); location.reload(); }
@@ -264,9 +263,8 @@ export default function Cockpit() {
           </div>
           <section className="card table-card"><div className="card-heading"><div><h3>Kanäle im Vergleich</h3><p>Direktvertrieb im ausgewählten Zeitraum</p></div><button className="text-button" onClick={() => move("campaign")}>Kampagnen <ArrowRight size={16} /></button></div><ChannelTable metrics={visible} channelOptions={channelOptions} /></section>
         </> : <>
-          <div className="page-heading"><div><h1>{headings[page][0]}</h1><p>{headings[page][1]}</p></div><div className="page-actions">
-            {page === "settings" ? <button className="button" onClick={() => document.getElementById("feature-status")?.scrollIntoView({ behavior: "smooth" })}><Activity size={16} /> Funktionsstatus</button>
-            : page === "review" ? <><button className="button" onClick={() => move("settings")}><Link2 size={16} /> Live-Abruf einrichten</button><button className="button" onClick={() => open({ type: "import", dataset: "reviews" })}><Download size={16} /> Bewertungen importieren</button>
+          <div className="page-heading"><div><h1>{headings[page][0]}</h1><p>{headings[page][1]}</p></div>{page !== "settings" && <div className="page-actions">
+            {page === "review" ? <><button className="button" onClick={() => move("settings")}><Link2 size={16} /> Live-Abruf einrichten</button><button className="button" onClick={() => open({ type: "import", dataset: "reviews" })}><Download size={16} /> Bewertungen importieren</button>
               {reviewSources.map((source) => <button key={source.id} className="button primary" disabled={busy} onClick={() => action({ action: "sync", id: source.id }, source.name + " abgeglichen.")}>
                 <RefreshCw size={16} /> {source.id === "google" ? "Google" : source.name} {source.mode === "live" ? "abrufen" : "Beispiele laden"}</button>)}</>
             : page === "connections" ? <button className="button primary" onClick={() => open({ type: "import" })}><Plus size={17} /> Daten importieren</button>
@@ -275,7 +273,7 @@ export default function Cockpit() {
             : page === "offer" ? <><button className="button" onClick={() => open({ type: "import", dataset: "offers" })}>Angebote importieren</button><button className="button" onClick={() => open({ type: "edit", kind: "offer" })}><Plus size={17} /> Angebot</button><button className="button primary" disabled={busy || !offers.length} onClick={() => action({ action: "check" }, "Angebotsprüfung abgeschlossen.")}><Activity size={17} /> Prüfung starten</button></>
             : page === "agency" ? <><button className="button" onClick={() => open({ type: "import", dataset: "agency" })}>Budgets importieren</button><button className="button primary" onClick={() => open({ type: "edit", kind: "agency" })}><Plus size={17} /> Agentur anlegen</button></>
             : <button className="button primary" onClick={() => open({ type: "edit", kind: page })}><Plus size={17} /> {page === "campaign" ? "Kampagne" : "Aufgabe"} anlegen</button>}
-          </div></div>
+          </div>}</div>
           {page === "settings" ? (data && <WorkspaceSettings data={data} busy={busy} refresh={refreshWorkspace} save={async (payload, message) => Boolean(await action(payload, message))} />)
           : page === "connections" ? <>
             <section className="card panel"><div className="card-heading"><div><h3>Quellenstatus</h3><p>Ergebnisse des letzten Abrufs pro Dienst.</p></div><button className="button" onClick={() => move("settings")}><Settings size={16} /> Verbindungen konfigurieren</button></div>
@@ -565,11 +563,9 @@ function Editor({ kind, item, offers, sources, owners, channelOptions, busy, ai,
     {kind === "review" && <label className="form-field">Antwort<textarea name="response" rows={3} maxLength={2400} defaultValue={d?.response} /></label>}
     {(kind === "review" || kind === "content") && <p className="form-help">Prüfe vor der Freigabe Angaben, Markenstil und Datenschutz. Die Freigabe gilt in diesem Arbeitsbereich.</p>}
     <div className="inline-actions"><button type="submit" className="button primary" disabled={busy}>Speichern</button>{draft && kind === "review" && <>
-      <button type="button" className="button" onClick={draft} disabled={busy || !ai} title={!ai ? "OpenAI-Zugang fehlt" : undefined}><Sparkles size={16} /> Antwort mit KI entwerfen</button>
-      {!ai && <button type="button" className="button" onClick={draft} disabled={busy}>Antwortvorlage anwenden</button>}
+      <button type="button" className="button" onClick={draft} disabled={busy}>{ai ? <><Sparkles size={16} /> Antwort mit KI entwerfen</> : "Antwortvorlage anwenden"}</button>
     </>}{kind === "review" && d?.status === "Freigegeben" && d.response && <button type="button" className="button" onClick={() => download("bewertungsantwort.txt", d.response!, "text/plain;charset=utf-8")}><Download size={16} /> Antwort exportieren</button>}
     {kind === "guide" && d?.description && <button type="button" className="button" onClick={() => download("arbeitsanleitung.txt", d.title + "\n\n" + d.description, "text/plain;charset=utf-8")}><Download size={16} /> Anleitung exportieren</button>}
     {remove && <button type="button" className="button danger-text" onClick={remove} disabled={busy}>{deleteLabels[kind]?.[0]} löschen</button>}</div>
-    {kind === "review" && !ai && <p className="form-help">OpenAI-Zugang für KI-Entwürfe fehlt.</p>}
   </form>;
 }

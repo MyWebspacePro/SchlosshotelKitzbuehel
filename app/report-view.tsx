@@ -17,7 +17,7 @@ export default function ReportView({ item, reports, select, analyse, busy, ai, r
       </select></label>
       <div className="inline-actions">
         <button className="button danger-text" disabled={busy} onClick={remove}>Bericht löschen</button>
-        <button className="button" disabled={busy || !ai} title={!ai ? "OpenAI-Zugang fehlt" : undefined} onClick={analyse}><Sparkles size={16} /> {ai ? "KI-Auswertung" : "KI-Auswertung · Zugang fehlt"}</button>
+        {ai && <button className="button" disabled={busy} onClick={analyse}><Sparkles size={16} /> KI-Auswertung</button>}
         <a className="button" href={pdf} target="_blank" rel="noreferrer"><Printer size={16} /> Druckansicht</a>
         <a className="button primary" href={pdf + "?download=1"}><Download size={16} /> PDF herunterladen</a>
       </div>

@@ -64,8 +64,7 @@ export default function WorkspaceSettings({ data, busy, save, refresh }: { data:
           const saved = await save({ action: "connection-setting", id: entry.id, ...change }, "Verbindung gespeichert.");
           if (saved) setConnection(undefined);
         }} /> : <>
-          <div><strong>{providers[entry.id]?.title ?? entry.name}</strong><small>{entry.category} · {connectionModeLabel[entry.mode]}{entry.account && " · " + entry.account}</small>
-            {providers[entry.id] && <small>{entry.liveAvailable ? "API-Zugang hinterlegt" : "Live-API · Freigabe fehlt"}</small>}</div>
+          <div><strong>{providers[entry.id]?.title ?? entry.name}</strong><small>{entry.category} · {connectionModeLabel[entry.mode]}{entry.account && " · " + entry.account}</small></div>
           <div className="inline-actions">
             {entry.profile_url && <a href={entry.profile_url} className="button" target="_blank" rel="noreferrer">Profil öffnen</a>}
             <button type="button" className="button" disabled={!canManage || busy || addingService} onClick={() => setConnection(entry.id)}>Konfigurieren</button>
@@ -76,14 +75,6 @@ export default function WorkspaceSettings({ data, busy, save, refresh }: { data:
         <p className="form-help">Der Betreiber hinterlegt die Plattformzugänge serverseitig und ordnet sie mit diesem Code dem Arbeitsbereich zu.</p>
         <label className="form-field">Arbeitsbereichscode<input readOnly value={data.connectorTag} onFocus={(event) => event.currentTarget.select()} /></label>
       </details>
-    </section>
-    <section id="feature-status" className="card panel settings-panel" aria-label="Funktionsstatus">
-      <div className="card-heading"><div><h3>Funktionsstatus</h3><p>Welche Funktionen verfügbar sind und welche einen Plattformzugang brauchen.</p></div></div>
-      <ul className="settings-list">
-        <li className="settings-row"><div><strong>KI-Entwürfe und KI-Berichtsauswertung</strong><small>{data.ai ? "OpenAI konfiguriert" : "OpenAI-Zugang fehlt · Textvorlagen verfügbar"}</small></div></li>
-        <li className="settings-row"><div><strong>Instagram-Beiträge</strong><small>PNG- und ZIP-Export verfügbar · Direktveröffentlichung derzeit nicht verfügbar</small></div></li>
-        <li className="settings-row"><div><strong>Newsletter</strong><small>HTML-Export verfügbar · Versand über den Newsletter-Dienst</small></div></li>
-      </ul>
     </section>
   </>;
 }
