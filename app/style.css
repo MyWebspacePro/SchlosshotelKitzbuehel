@@ -439,3 +439,8 @@ footer { display: flex; gap: 12px; flex-wrap: wrap; justify-content: space-betwe
 .website-card-copy p { white-space:pre-wrap; line-height:1.6; }
 .website-card-copy strong { display:block; margin:14px 0; }
 .website-card-button { display:inline-block; margin-top:8px; padding:10px 15px; background:#591d38; color:white; border-radius:4px; font-size:12px; }
+
+.review-excerpt { color:#4d4144; font-size:13px; line-height:1.45; margin:7px 0 2px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; white-space:pre-line; overflow-wrap:anywhere; }
+.review-pagination { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; padding:12px 15px; color:var(--muted); font-size:12px; }
+.review-pagination > div { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+.review-pagination .button { padding:6px 11px; }

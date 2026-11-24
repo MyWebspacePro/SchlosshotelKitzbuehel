@@ -120,6 +120,7 @@ export default function Cockpit() {
   const [query, setQuery] = useState("");
   const [siteUrl, setSiteUrl] = useState<string>(websitePages[0][1]);
   const [statusFilter, setStatusFilter] = useState("Alle");
+  const [reviewPage, setReviewPage] = useState(1);
 
   const refreshWorkspace = useCallback(async (signal?: AbortSignal) => {
     const response = await fetch("/api/workspace", { signal, cache: "no-store" });
@@ -146,7 +147,7 @@ export default function Cockpit() {
   }, [refreshWorkspace]);
 
   function move(next: Page) {
-    setPage(next); setMenu(false); setStatusFilter("Alle"); setSelected(""); setDraftFormat(undefined);
+    setPage(next); setMenu(false); setStatusFilter("Alle"); setReviewPage(1); setSelected(""); setDraftFormat(undefined);
     if (location.hash !== "#" + next) history.pushState(null, "", "#" + next);
     window.scrollTo({ top: 0, behavior: "instant" });
   }
@@ -200,6 +201,9 @@ export default function Cockpit() {
   });
   const visibleRecords = records.filter((r) => r.kind === page && (statusFilter === "Alle" || r.data.status === statusFilter) &&
     (r.kind !== "review" || !/^r(?:[1-9]\d*)$/.test(r.id) || sources.some((source) => source.name === r.data.channel && source.mode === "example")));
+  const reviewPages = Math.max(1, Math.ceil(visibleRecords.length / 10));
+  const currentReviewPage = Math.min(reviewPage, reviewPages);
+  const listedRecords = page === "review" ? visibleRecords.slice((currentReviewPage - 1) * 10, currentReviewPage * 10) : visibleRecords;
   const activeItem = draftFormat ? undefined : visibleRecords.find((r) => r.id === selected) ?? visibleRecords[0];
   const campaignBeingEdited = modal?.type === "edit" && modal.kind === "campaign" ? modal.item : undefined;
   const offerBeingEdited = modal?.type === "edit" && modal.kind === "offer";
@@ -344,12 +348,18 @@ export default function Cockpit() {
               <Kpi icon={<Euro size={17} />} label="Geplantes Budget" value={euro(visibleRecords.reduce((a, r) => a + (r.data.amount ?? 0), 0))} foot="Summe der Agenturbudgets" />
               <Kpi icon={<ArrowDownRight size={17} />} label="Ist-Kosten" value={visibleRecords.some((r) => r.data.actual !== undefined) ? euro(visibleRecords.reduce((a, r) => a + (r.data.actual ?? 0), 0)) : "—"} foot="Erfasste Ausgaben" />
             </div>}
-            {["task", "review", "campaign"].includes(page) && <div className="filter-bar">{["Alle", ...(statuses[page as Kind] ?? [])].map((status) => <button className={statusFilter === status ? "active-filter" : ""} aria-pressed={statusFilter === status} key={status} onClick={() => setStatusFilter(status)}>{status}</button>)}</div>}
+            {["task", "review", "campaign"].includes(page) && <div className="filter-bar">{["Alle", ...(statuses[page as Kind] ?? [])].map((status) => <button className={statusFilter === status ? "active-filter" : ""} aria-pressed={statusFilter === status} key={status} onClick={() => { setStatusFilter(status); setReviewPage(1); }}>{status}</button>)}</div>}
             {page === "offer" ? <section className="offer-grid" aria-label="Angebote">
               {offers.length ? offers.map((offer) => <OfferCard key={offer.id} item={offer} onClick={() => open({ type: "edit", kind: "offer", item: offer })} />) : <div className="card"><Empty>Lege ein Angebot an oder importiere es aus einer Datei.</Empty></div>}
             </section> : <section className="card table-card">
               {visibleRecords.length === 0 && <Empty>Für diese Ansicht gibt es derzeit keine Einträge.</Empty>}
-              {visibleRecords.map((r) => <RecordRow key={r.id} item={r} channelOptions={channelOptions} onClick={() => open({ type: "edit", kind: r.kind, item: r })} />)}
+              {listedRecords.map((r) => <RecordRow key={r.id} item={r} channelOptions={channelOptions} onClick={() => open({ type: "edit", kind: r.kind, item: r })} />)}
+              {page === "review" && reviewPages > 1 && <nav className="review-pagination" aria-label="Bewertungsseiten">
+                <span>{(currentReviewPage - 1) * 10 + 1}–{Math.min(currentReviewPage * 10, visibleRecords.length)} von {visibleRecords.length} Bewertungen</span>
+                <div><button className="button" disabled={currentReviewPage === 1} onClick={() => setReviewPage(currentReviewPage - 1)}>Zurück</button>
+                  <span aria-live="polite">Seite {currentReviewPage} von {reviewPages}</span>
+                  <button className="button" disabled={currentReviewPage === reviewPages} onClick={() => setReviewPage(currentReviewPage + 1)}>Weiter</button></div>
+              </nav>}
             </section>}
             {page === "campaign" && <CampaignCalendar campaigns={campaigns} select={(item) => open({ type: "edit", kind: "campaign", item })} />}
             {page === "campaign" && <section className="card table-card panel">
@@ -449,7 +459,7 @@ function RecordRow({ item, onClick, current, channelOptions = [] }: { item: Reco
     d.stars && d.stars + " von 5"
   ].filter(Boolean).join(" · ");
   return <button className={"record-row " + (current ? "selected-row" : "")} onClick={onClick}>
-    <div><strong>{d.stars && <Star size={15} />} {d.title}</strong><small>{detail || d.description}</small></div>
+    <div><strong>{d.stars && <Star size={15} />} {d.title}</strong><small>{detail || d.description}</small>{item.kind === "review" && d.description && <p className="review-excerpt">{d.description}</p>}</div>
     {pill(d.status)}<ArrowRight size={16} />
   </button>;
 }
