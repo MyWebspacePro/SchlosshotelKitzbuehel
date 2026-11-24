@@ -41,6 +41,8 @@ export function latestOfferChecks(records: RecordItem[]) {
   return latest;
 }
 export type ConnectionMode = "example" | "import" | "live" | "off";
+export const connectionCategories = ["Buchungsdaten", "Bewertungen", "Controlling", "E-Mail", "Hotelsystem", "Kampagnen", "Metasuche", "Raten", "SEO", "Social Media", "Website", "Sonstige"];
+export const isCustomConnection = (id: string) => id.startsWith("custom-");
 export type Connection = { id: string; name: string; category: string; last_sync: string | null; last_result: string | null;
   mode: ConnectionMode; account: string; profile_url: string; liveAvailable: boolean };
 export type Schedule = { action: "check" | "report" | "campaign-automation"; hours: number; next_at: string; last_status: string | null };

@@ -30,6 +30,8 @@ Mit `OPENAI_API_KEY` und `OPENAI_MODEL` steht textgenerierende KI zur Verfügung
 
 Unter **Einstellungen → Verbindungen** werden Referenz, Profiladresse und die Art der Datenübernahme gespeichert. Der Arbeitsbereichscode unter **API-Freigabe** gehört serverseitig in `CONNECTOR_WORKSPACE_TAG`. Nur der zugeordnete Arbeitsbereich kann die Serverzugänge verwenden.
 
+Über **Dienst hinzufügen** lässt sich eine eigene Verbindung mit Kategorie, Kontoreferenz und HTTPS-Profiladresse anlegen. Eigene Dienste unterstützen Dateiimporte. Bei Bewertungen und Angeboten steht der Dienstname als Quelle in der Datei. Kennzahlen werden über den Kanal in der Datei zugeordnet.
+
 - Google benötigt einen Business-Profile-OAuth-Client mit `business.manage` und einen Refresh-Token für den verifizierten Standort. Im Cockpit wird `accounts/<Konto-ID>/locations/<Standort-ID>` eingetragen.
 - Booking.com benötigt einen Connectivity-Maschinenzugang mit Zugriff auf `review-api` und die vom Hotel freigegebene Unterkunft. Im Cockpit wird die numerische Unterkunfts-ID eingetragen.
 - Instagram benötigt einen User-Token für die Instagram API mit Instagram Login und `instagram_business_basic` für ein Profikonto. `INSTAGRAM_API_VERSION` bestimmt die für die Meta-App verwendete API-Version. Die Verbindung prüft das Konto und liest Profilinformationen. Beiträge werden aus dem Content-Studio exportiert.

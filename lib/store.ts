@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { Pool, type QueryResultRow } from "pg";
-import { agencyChannels, availabilityLabel, brandImages, campaignRowsFor, channelCode, channels, defaultChannelOptions, latestOfferChecks, offerComparison, priceEuro, sum, euro, type CampaignMetric, type ChannelOption, type ContentRevision, type Connection, type Data, type Kind, type MediaImage, type Metric, type OwnerOption, type RecordItem, type Schedule, type SlideCrop, type Workspace } from "./model";
+import { agencyChannels, availabilityLabel, brandImages, campaignRowsFor, channelCode, channels, connectionCategories, defaultChannelOptions, isCustomConnection, latestOfferChecks, offerComparison, priceEuro, sum, euro, type CampaignMetric, type ChannelOption, type ContentRevision, type Connection, type Data, type Kind, type MediaImage, type Metric, type OwnerOption, type RecordItem, type Schedule, type SlideCrop, type Workspace } from "./model";
 import { connectors, examples, feed } from "./seed";
 import { checkWebsite } from "./website-check";
 import { createReportSnapshot, reportDescription, reportKinds, type ReportKind } from "./report";
@@ -378,6 +378,8 @@ async function importRecords(query: Query, workspace: string, dataset: Exclude<D
   const kind = ({ offers: "offer", reviews: "review", agency: "agency" } as const)[dataset];
   const records = state.records.filter((entry) => entry.kind === kind);
   const byId = new Map(records.map((entry) => [entry.id, entry]));
+  const importSources = new Map(state.connections.filter((entry) => !isCustomConnection(entry.id) || entry.mode === "import")
+    .map((entry) => [entry.name, entry.category]));
   const legacyOrigins = dataset === "agency" ? [...new Set(["", ...state.channelOptions.flatMap(({ code, label }) => [code, label]),
     ...records.flatMap((entry) => entry.data.channel ? [entry.data.channel] : [])])] : [];
   const seen = new Set<string>();
@@ -411,7 +413,7 @@ async function importRecords(query: Query, workspace: string, dataset: Exclude<D
       const base = existing?.data;
       const data: Data = { ...base, title, description: base?.description ?? "", status: base?.status ?? "Offen" };
       if (dataset === "offers") {
-        if (!state.connections.some((connection) => connection.name === origin && ["Hotelsystem", "Buchungsdaten", "Raten", "Website"].includes(connection.category))) throw new InputError("Die Angebotsquelle fehlt im Quellenverzeichnis.");
+        if (!["Hotelsystem", "Buchungsdaten", "Raten", "Website"].includes(importSources.get(origin) ?? "")) throw new InputError("Wähle eine für den Angebotsimport verfügbare Quelle.");
         const start = date(row.start);
         const due = date(row.due);
         const occupancy = amount(row.occupancy, "Belegung", true);
@@ -422,7 +424,7 @@ async function importRecords(query: Query, workspace: string, dataset: Exclude<D
         Object.assign(data, fields);
         if (!base || Object.entries(fields).some(([key, field]) => base[key as keyof Data] !== field)) data.status = "Zu prüfen";
       } else if (dataset === "reviews") {
-        if (!state.connections.some((connection) => connection.name === origin && connection.category === "Bewertungen")) throw new InputError("Wähle ein vorhandenes Bewertungsportal.");
+        if (importSources.get(origin) !== "Bewertungen") throw new InputError("Wähle ein für den Import verfügbares Bewertungsportal.");
         data.channel = origin;
         data.source = "Dateiimport";
         data.description = text(row.description, "Bewertung");
@@ -526,12 +528,24 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
     } else await query("INSERT INTO hotel_owner (workspace,id,name,name_key,role) VALUES ($1,$2,$3,lower($3),$4)", [id, randomUUID(), name, role]);
   } else if (body.action === "connection-setting") {
     const connection = state.connections.find((entry) => entry.id === body.id);
-    if (!connection) throw new InputError("Diese Verbindung wurde nicht gefunden.");
+    if (body.id !== undefined && !connection) throw new InputError("Diese Verbindung wurde nicht gefunden.");
     const mode = body.mode;
     if (mode !== "example" && mode !== "import" && mode !== "live" && mode !== "off") throw new InputError("Wähle eine gültige Datenquelle.");
     const account = text(body.account ?? "", "Konto-ID", 180);
     const url = text(body.profileUrl ?? "", "Profiladresse", 500);
     if (url && (!URL.canParse(url) || new URL(url).protocol !== "https:")) throw new InputError("Die Profiladresse muss HTTPS verwenden.");
+    if ((!connection || isCustomConnection(connection.id)) && mode !== "import" && mode !== "off") {
+      throw new InputError("Eigene Dienste unterstützen Dateiimport oder können deaktiviert werden.");
+    }
+    if (!connection) {
+      const name = text(body.name, "Dienstname", 100).replace(/\s+/g, " ");
+      const category = text(body.category, "Kategorie", 80);
+      if (!name || !connectionCategories.includes(category)) throw new InputError("Gib einen Dienstnamen ein und wähle eine Kategorie.");
+      if (state.connections.some((entry) => entry.name.toLowerCase() === name.toLowerCase())) throw new InputError("Ein Dienst mit diesem Namen ist bereits vorhanden.");
+      await query("INSERT INTO hotel_connection (workspace,id,name,category,mode,account,profile_url) VALUES ($1,$2,$3,$4,$5,$6,$7)",
+        [id, "custom-" + randomUUID(), name, category, mode, account, url]);
+      return;
+    }
     if (mode === "live" && (!connection.liveAvailable || !validProviderAccount(connection.id, account))) throw new InputError("Für den Live-Modus sind eine API-Freigabe und eine gültige Konto-ID erforderlich.");
     const reset = mode !== connection.mode || account !== connection.account;
     await query(`UPDATE hotel_connection SET mode=$3,account=$4,profile_url=$5,

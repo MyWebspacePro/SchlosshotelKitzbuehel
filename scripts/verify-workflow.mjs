@@ -57,6 +57,21 @@ state = await requestWorkspace({ action: "connection-setting", id: "meta", mode:
 assert.equal(state.connections.find((entry) => entry.id === "meta").account, "1234");
 await requestWorkspace({ action: "sync", id: "meta" }, 400);
 await requestWorkspace({ action: "connection-setting", id: "booking", mode: "live", account: "1234" }, 400);
+const customService = { name: "Alpenportal", category: "Bewertungen", mode: "import", account: "qa-01", profileUrl: "https://example.com/profil" };
+state = await requestWorkspace({ action: "connection-setting", ...customService });
+const service = state.connections.find((entry) => entry.name === customService.name);
+assert.deepEqual([service.category, service.mode, service.account, service.profile_url, service.liveAvailable],
+  ["Bewertungen", "import", "qa-01", customService.profileUrl, false]);
+await requestWorkspace({ action: "connection-setting", ...customService, name: " ALPENPORTAL " }, 400);
+await requestWorkspace({ action: "connection-setting", id: service.id, mode: "example" }, 400);
+const portalReviews = { action: "import", dataset: "reviews", rows: [{ id: "qa-review", source: service.name, title: "Prüfgast", description: "Alles gut", stars: 5 }] };
+state = await requestWorkspace(portalReviews);
+const importedReview = state.records.find((entry) => entry.kind === "review" && entry.data.channel === service.name);
+assert.equal(importedReview?.data.source, "Dateiimport");
+await requestWorkspace({ action: "delete", id: importedReview.id });
+state = await requestWorkspace({ action: "connection-setting", id: service.id, mode: "off", account: "qa-02" });
+assert.equal(state.connections.find((entry) => entry.id === service.id).account, "qa-02");
+await requestWorkspace(portalReviews, 400);
 const metrics = { day: "2026-11-20", channel: "Instagram", visits: 200, starts: 40, bookings: 10, revenue: 1500, cost: 60 };
 const unknownChannel = await requestWorkspace({ action: "import", rows: [{ ...metrics, channel: "Gogle Ads" }, metrics] }, 400);
 assert.match(unknownChannel.error, /Zeile 2.*Gogle Ads/);

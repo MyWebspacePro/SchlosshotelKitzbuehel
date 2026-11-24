@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Link2, UserRound } from "lucide-react";
+import { Plus, UserRound } from "lucide-react";
 import ChannelSettings from "./channel-settings";
 import { AccountForm } from "./team-access";
-import type { Connection, ConnectionMode, OwnerOption, WorkspaceResponse } from "../lib/model";
+import { connectionCategories, isCustomConnection, type Connection, type ConnectionMode, type OwnerOption, type WorkspaceResponse } from "../lib/model";
 
 type SettingsAction = (payload: Record<string, unknown>, message: string) => Promise<boolean>;
 const providers: Record<string, { title?: string; account: string; help: string }> = {
@@ -18,6 +18,7 @@ export default function WorkspaceSettings({ data, busy, save, refresh }: { data:
   const [editing, setEditing] = useState<string>();
   const [accountEditing, setAccountEditing] = useState<string>();
   const [connection, setConnection] = useState<string>();
+  const [addingService, setAddingService] = useState(false);
   const canManage = data.identity.role !== "member";
   const firstAccount = data.identity.role === "guest";
 
@@ -49,18 +50,25 @@ export default function WorkspaceSettings({ data, busy, save, refresh }: { data:
       </ul>
     </section>
     <ChannelSettings options={data.channelOptions} busy={busy || !canManage} onSave={(change) => save({ action: "channel-setting", ...change }, "Kanal gespeichert.")} />
-    <section className="card panel settings-panel">
-      <div className="card-heading"><div><h3>Verbindungen</h3><p>Lege pro Dienst Konto, Profiladresse und Art der Datenübernahme fest.</p></div><Link2 size={19} /></div>
+    <section className="card panel settings-panel" aria-label="Verbindungen">
+      <div className="card-heading"><div><h3>Verbindungen</h3><p>Lege pro Dienst Konto, Profiladresse und Art der Datenübernahme fest.</p></div>
+        {canManage && !addingService && <button type="button" className="button primary" disabled={busy} onClick={() => {
+          setConnection(undefined);
+          setAddingService(true);
+        }}><Plus size={16} /> Dienst hinzufügen</button>}</div>
+      {addingService && <ConnectionForm busy={busy} cancel={() => setAddingService(false)} submit={async (change) => {
+        if (await save({ action: "connection-setting", ...change }, "Dienst hinzugefügt.")) setAddingService(false);
+      }} />}
       <ul className="settings-list">{data.connections.map((entry) => <li className="settings-row" key={entry.id}>
         {connection === entry.id ? <ConnectionForm entry={entry} busy={busy} cancel={() => setConnection(undefined)} submit={async (change) => {
           const saved = await save({ action: "connection-setting", id: entry.id, ...change }, "Verbindung gespeichert.");
           if (saved) setConnection(undefined);
         }} /> : <>
-          <div><strong>{providers[entry.id]?.title ?? entry.name}</strong><small>{connectionModeLabel[entry.mode]}{entry.account && " · " + entry.account}</small>
+          <div><strong>{providers[entry.id]?.title ?? entry.name}</strong><small>{entry.category} · {connectionModeLabel[entry.mode]}{entry.account && " · " + entry.account}</small>
             {providers[entry.id] && <small>{entry.liveAvailable ? "API-Zugang hinterlegt" : "Live-API · Freigabe fehlt"}</small>}</div>
           <div className="inline-actions">
             {entry.profile_url && <a href={entry.profile_url} className="button" target="_blank" rel="noreferrer">Profil öffnen</a>}
-            <button type="button" className="button" disabled={!canManage} onClick={() => setConnection(entry.id)}>Konfigurieren</button>
+            <button type="button" className="button" disabled={!canManage || busy || addingService} onClick={() => setConnection(entry.id)}>Konfigurieren</button>
           </div>
         </>}
       </li>)}</ul>
@@ -96,24 +104,32 @@ function PersonForm({ person, busy, submit, cancel }: {
 }
 
 function ConnectionForm({ entry, busy, submit, cancel }: {
-  entry: Connection; busy: boolean; submit: (data: Record<string, FormDataEntryValue>) => Promise<void>; cancel: () => void;
+  entry?: Connection; busy: boolean; submit: (data: Record<string, FormDataEntryValue>) => Promise<void>; cancel: () => void;
 }) {
-  const [mode, setMode] = useState(entry.mode);
-  const provider = providers[entry.id];
-  return <form className="settings-connection-form" aria-label={entry.name + " konfigurieren"} onSubmit={(event) => {
+  const [mode, setMode] = useState<ConnectionMode>(entry?.mode ?? "import");
+  const provider = entry ? providers[entry.id] : undefined;
+  const custom = !entry || isCustomConnection(entry.id);
+  return <form className="settings-connection-form" aria-label={entry ? entry.name + " konfigurieren" : "Neuen Dienst einrichten"} onSubmit={(event) => {
     event.preventDefault();
     void submit(Object.fromEntries(new FormData(event.currentTarget)));
   }}>
-    <strong>{provider?.title ?? entry.name}</strong>
+    {entry ? <strong>{provider?.title ?? entry.name}</strong> : <div className="fields">
+      <label className="form-field">Dienstname<input name="name" maxLength={100} required autoFocus /></label>
+      <label className="form-field">Kategorie<select name="category" defaultValue="" required>
+        <option value="">Kategorie auswählen</option>{connectionCategories.map((category) => <option key={category}>{category}</option>)}
+      </select></label>
+    </div>}
     <div className="fields">
       <label className="form-field">Datenübernahme<select name="mode" value={mode} onChange={(event) => setMode(event.target.value as ConnectionMode)}>
-        <option value="import">Dateiimport</option><option value="off">Deaktiviert</option><option value="example">Beispielquelle</option>
-        {provider && <option value="live" disabled={!entry.liveAvailable}>{entry.liveAvailable ? "Live-API" : "Live-API · Freigabe fehlt"}</option>}
+        <option value="import">Dateiimport</option><option value="off">Deaktiviert</option>
+        {!custom && <option value="example">Beispielquelle</option>}
+        {provider && entry && <option value="live" disabled={!entry.liveAvailable}>{entry.liveAvailable ? "Live-API" : "Live-API · Freigabe fehlt"}</option>}
       </select></label>
-      <label className="form-field">{provider?.account ?? "Konto-ID oder Referenz"}<input name="account" defaultValue={entry.account} maxLength={180} required={mode === "live"} /></label>
+      <label className="form-field">{provider?.account ?? "Konto-ID oder Referenz"}<input name="account" defaultValue={entry?.account} maxLength={180} required={mode === "live"} /></label>
     </div>
-    <label className="form-field">Profiladresse (HTTPS)<input type="url" name="profileUrl" defaultValue={entry.profile_url} maxLength={500} /></label>
+    <label className="form-field">Profiladresse (HTTPS)<input type="url" name="profileUrl" defaultValue={entry?.profile_url} maxLength={500} /></label>
     {provider && <p className="form-help">{provider.help}</p>}
-    <div className="inline-actions"><button className="button primary" disabled={busy}>Verbindung speichern</button><button type="button" className="button" onClick={cancel}>Abbrechen</button></div>
+    {custom && <p className="form-help">Importiere Dateien unter „Datenquellen“. Für Bewertungen und Angebote verwendest du den Dienstnamen als Quelle. Kennzahlen werden über die Spalte „Kanal“ zugeordnet.</p>}
+    <div className="inline-actions"><button className="button primary" disabled={busy}>{entry ? "Verbindung speichern" : "Dienst speichern"}</button><button type="button" className="button" onClick={cancel}>Abbrechen</button></div>
   </form>;
 }
