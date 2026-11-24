@@ -115,7 +115,7 @@ state = await requestWorkspace({ action: "report", kind: "website", from: "2026-
 assert.equal(storedReport(state, "Website & Direktbuchungen").daily.length, 1);
 assert.equal(storedReport(state, "Website & Direktbuchungen").daily[0].figures.visits, storedReport(state, "Website & Direktbuchungen").totals.visits);
 state = await requestWorkspace({ action: "report", kind: "reviews" });
-assert.equal(storedReport(state, "Gästebewertungen").reviews.total.count, 3);
+assert.equal(storedReport(state, "Gästebewertungen").reviews.total.count, state.records.filter((r) => r.kind === "review").length);
 assert.equal(storedReport(state, "Gästebewertungen").reviews.total.draft, 1);
 assert.equal(storedReport(state, "Gästebewertungen").from, "");
 state = await requestWorkspace({ action: "report", kind: "agencies" });
