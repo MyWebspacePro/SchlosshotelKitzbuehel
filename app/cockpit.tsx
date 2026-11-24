@@ -523,15 +523,17 @@ function Editor({ kind, item, offers, sources, owners, channelOptions, busy, ai,
   const [selectedChannels, setSelectedChannels] = useState(() => kind === "agency" ? agencyChannels(d) : []);
   const [copied, setCopied] = useState(false);
   const tracking = kind === "campaign" && campaignName.trim() && URL.canParse(target) && new URL(target).protocol === "https:" ? trackingLink(target, campaignName, campaignChannel) : "";
+  const reviewLocked = kind === "review" && d?.status === "Freigegeben";
   const options = statuses[kind] ?? [];
   return <form onSubmit={(e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (reviewLocked) return;
     const fields = Object.fromEntries(new FormData(e.currentTarget));
     save(kind === "agency" ? { ...fields, channels: selectedChannels } : fields);
   }}>
     {kind === "review" ? <div className="review-original"><strong>{d?.title}</strong><span> · {[d?.channel, d?.stars && number(d.stars, 2) + " von 5", d?.source === "API" ? "Live-API" : d?.source === "Dateiimport" ? "Dateiimport" : ""].filter(Boolean).join(" · ")}</span>{d?.description && <p>{d.description}</p>}</div>
       : <label className="form-field">{kind === "brand" ? "Markenname" : kind === "profile" ? "Name im Portal" : kind === "agency" ? "Name der Agentur" : "Titel"}<input name="title" defaultValue={d?.title ?? (kind === "brand" ? "Schlosshotel Kitzbühel" : undefined)} maxLength={120} required autoFocus onChange={kind === "campaign" ? (e) => { setCampaignName(e.target.value); setCopied(false); } : undefined} /></label>}
-    <div className="fields"><label className="form-field">Status<select name="status" defaultValue={d?.status ?? options[0]}>{options.map((s) => <option key={s}>{s}</option>)}</select></label>
+    <div className="fields"><label className="form-field">Status<select name="status" disabled={reviewLocked} defaultValue={d?.status ?? options[0]}>{options.map((s) => <option key={s}>{s}</option>)}</select></label>
     {kind === "profile" && item ? <label className="form-field">Portal<input name="source" value={d?.source ?? ""} readOnly /></label> : ["system", "profile"].includes(kind) ? <Choice label={kind === "profile" ? "Portal" : "Quelle"} name="source" value={d?.source} required
       options={sources.filter((source) => kind === "system" || ["Bewertungen", "Social Media", "Metasuche"].includes(source.category)).map((source) => source.name)} />
       : ["campaign", "task"].includes(kind) ? <Choice label="Kanal" name="channel" value={d?.channel} onChange={kind === "campaign" ? (channel) => { setCampaignChannel(channel); setCopied(false); } : undefined}
@@ -571,9 +573,9 @@ function Editor({ kind, item, offers, sources, owners, channelOptions, busy, ai,
     {kind === "profile" && <label className="form-field">Profil-URL<input name="url" type="url" defaultValue={d?.url} required /></label>}
     {kind === "brand" && <><label className="form-field">Markenstil<textarea name="tone" rows={2} defaultValue={d?.tone} /></label><Choice name="language" label="Standardsprache" value={d?.language ?? "Deutsch"} options={["Deutsch", "Englisch"]} /></>}
     {kind !== "review" && <label className="form-field">{kind === "content" ? "Beitragstext" : kind === "agency" ? "Leistungen" : "Beschreibung"}<textarea name="description" rows={4} maxLength={2400} defaultValue={d?.description} /></label>}
-    {kind === "review" && <label className="form-field">Antwort<textarea name="response" rows={3} maxLength={2400} defaultValue={d?.response} /></label>}
+    {kind === "review" && <label className="form-field">Antwort<textarea name="response" rows={3} maxLength={2400} defaultValue={d?.response} readOnly={reviewLocked} /></label>}
     {(kind === "review" || kind === "content") && <p className="form-help">Prüfe vor der Freigabe Angaben, Markenstil und Datenschutz. Die Freigabe gilt in diesem Arbeitsbereich.</p>}
-    <div className="inline-actions"><button type="submit" className="button primary" disabled={busy}>Speichern</button>{draft && kind === "review" && <>
+    <div className="inline-actions">{!reviewLocked && <button type="submit" className="button primary" disabled={busy}>Speichern</button>}{!reviewLocked && draft && kind === "review" && <>
       <button type="button" className="button" onClick={draft} disabled={busy}>{ai ? <><Sparkles size={16} /> Antwort mit KI entwerfen</> : "Antwortvorlage anwenden"}</button>
     </>}{kind === "review" && d?.status === "Freigegeben" && d.response && <button type="button" className="button" onClick={() => download("bewertungsantwort.txt", d.response!, "text/plain;charset=utf-8")}><Download size={16} /> Antwort exportieren</button>}
     {kind === "guide" && d?.description && <button type="button" className="button" onClick={() => download("arbeitsanleitung.txt", d.title + "\n\n" + d.description, "text/plain;charset=utf-8")}><Download size={16} /> Anleitung exportieren</button>}

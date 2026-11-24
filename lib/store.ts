@@ -431,7 +431,7 @@ async function importRecords(query: Query, workspace: string, dataset: Exclude<D
         data.description = text(row.description, "Bewertung");
         data.stars = amount(row.stars, "Sterne", true);
         if (data.stars < 1 || data.stars > 5 || !data.description) throw new InputError("Bewertungstext und 1 bis 5 Sterne sind erforderlich.");
-        if (base && (base.description !== data.description || base.stars !== data.stars)) data.status = base.response ? "Entwurf" : "Offen";
+        if (base && base.status !== "Freigegeben" && (base.description !== data.description || base.stars !== data.stars)) data.status = base.response ? "Entwurf" : "Offen";
       } else {
         const singleCode = channelCode(origin, state.channelOptions);
         const exact = state.channelOptions.some((option) => option.code === singleCode);
@@ -587,6 +587,7 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
     const raw = body.data as Partial<Data> | null;
     if (!raw || typeof raw !== "object") throw new InputError("Die Eingaben fehlen.");
     if (kind === "review" && !item) throw new InputError("Übernimm Bewertungen per Synchronisierung oder Dateiimport.");
+    if (kind === "review" && item?.data.status === "Freigegeben") throw new InputError("Die freigegebene Antwort ist schreibgeschützt.");
     const title = kind === "review" ? item!.data.title : text(raw.title, "Titel", 120);
     if (!title) throw new InputError("Ein Titel ist erforderlich.");
     if (!raw.status || !statuses[kind].includes(raw.status)) throw new InputError("Der Status ist ungültig.");
@@ -698,7 +699,7 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
     }
     if (kind === "review" && data.status === "Freigegeben" && !data.response) throw new InputError("Vor der Freigabe fehlt die Antwort.");
     if (kind === "content" && data.status === "Freigegeben" && data.format !== "instagram" && !data.description) throw new InputError("Vor der Freigabe fehlt der Beitragstext.");
-    if (item?.data.status === "Freigegeben" && ((kind === "content" && body.approve !== true && (data.title !== item.data.title || data.description !== item.data.description)) || (kind === "review" && data.response !== item.data.response))) data.status = "Entwurf";
+    if (item?.data.status === "Freigegeben" && kind === "content" && body.approve !== true && (data.title !== item.data.title || data.description !== item.data.description)) data.status = "Entwurf";
     if (item) await revise(query, id, item, data);
     else if (kind === "content") {
       await query(`WITH inserted AS (
@@ -779,7 +780,7 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
         const recordId = "review-" + reference;
         const prior = state.records.find((entry) => entry.id === recordId)?.data;
         const description = row.comment.trim().slice(0, 2400);
-        const status = prior?.status === "Freigegeben" && (prior.description !== description || prior.stars !== row.score) ? "Entwurf" : prior?.status ?? "Offen";
+        const status = prior?.status ?? "Offen";
         return { id: recordId, data: { ...prior, title: row.name.slice(0, 120), description, stars: row.score, status,
           channel: connection.name, source: "API", receivedAt: row.receivedAt ?? prior?.receivedAt, response: prior?.response ?? row.replied?.slice(0, 2400) } };
       });
@@ -871,6 +872,7 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
     }
   } else if (body.action === "draft") {
     if (!item || !["content", "review"].includes(item.kind)) throw new InputError("Für diesen Eintrag gibt es keinen Entwurf.");
+    if (item.kind === "review" && item.data.status === "Freigegeben") throw new InputError("Die freigegebene Antwort ist schreibgeschützt.");
     const generation = await generateCopy(state, item);
     await revise(query, id, item, { ...item.data, status: "Entwurf",
       ...(item.kind === "review" ? { response: generation.body } : { description: generation.body, source: generation.source }) });
