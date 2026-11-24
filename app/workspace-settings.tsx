@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, UserRound } from "lucide-react";
+import { Plus } from "lucide-react";
 import ChannelSettings from "./channel-settings";
 import { sendAuth } from "./team-access";
 import { Choice } from "./form-fields";
@@ -16,7 +16,7 @@ const providers: Record<string, { title?: string; account: string; help: string 
 export const connectionModeLabel: Record<ConnectionMode, string> = { example: "Beispielquelle", import: "Dateiimport", live: "Live-API", off: "Deaktiviert" };
 
 export default function WorkspaceSettings({ data, busy, save, refresh }: { data: WorkspaceResponse; busy: boolean; save: SettingsAction; refresh: () => Promise<void> }) {
-  const [editing, setEditing] = useState<string>();
+  const [editing, setEditing] = useState<string | null>();
   const [connection, setConnection] = useState<string>();
   const [addingService, setAddingService] = useState(false);
   const canManage = data.identity.role !== "member";
@@ -25,9 +25,12 @@ export default function WorkspaceSettings({ data, busy, save, refresh }: { data:
 
   return <>
     <section className="card panel settings-panel">
-      <div className="card-heading"><div><h3>Personen, Zuständigkeiten & Zugänge</h3><p>Verwalte Aufgabenverantwortliche und ihre Benutzerkonten.</p></div><UserRound size={19} /></div>
+      <div className="card-heading"><div><h3>Personen, Zuständigkeiten & Zugänge</h3><p>Verwalte Aufgabenverantwortliche und ihre Benutzerkonten.</p></div>
+        {canManage && editing !== null && <button type="button" className="button primary" disabled={busy} onClick={() => setEditing(null)}>
+          <Plus size={16} /> Benutzer hinzufügen
+        </button>}</div>
       {!canManage && <p className="form-help">Benutzerkonten und Einstellungen werden vom Administrator verwaltet.</p>}
-      {canManage && <PersonForm roles={roles} firstAccount={firstAccount} busy={busy} refresh={refresh} />}
+      {canManage && editing === null && <PersonForm roles={roles} firstAccount={firstAccount} busy={busy} refresh={refresh} close={() => setEditing(undefined)} />}
       <ul className="settings-list">
         {data.owners.map((person) => {
           const account = data.accounts.find((entry) => entry.owner === person.id);
@@ -36,7 +39,7 @@ export default function WorkspaceSettings({ data, busy, save, refresh }: { data:
             busy={busy} refresh={refresh} close={() => setEditing(undefined)} /> : <>
             <div><strong>{person.name}</strong><small>{[person.role, person.active ? "Aktiv" : "Inaktiv"].filter(Boolean).join(" · ")}</small>
               {canManage && <small>{account ? (account.admin ? "Administrator" : "Benutzerkonto") + " · " + account.username : "Ohne Benutzerkonto"}</small>}</div>
-            <div className="inline-actions"><button type="button" className="button" disabled={!canManage} onClick={() => setEditing(person.id)}>Bearbeiten</button>
+            <div className="inline-actions"><button type="button" className="button" disabled={!canManage || editing === null} onClick={() => setEditing(person.id)}>Bearbeiten</button>
               <button type="button" className="button" disabled={busy || !canManage || account?.admin} onClick={() => save({ action: "owner-setting", id: person.id, active: !person.active }, "Person gespeichert.")}>{person.active ? "Deaktivieren" : "Aktivieren"}</button></div>
           </>}
         </li>;
@@ -75,12 +78,12 @@ export default function WorkspaceSettings({ data, busy, save, refresh }: { data:
 
 function PersonForm({ person, account, roles, firstAccount, busy, refresh, close }: {
   person?: OwnerOption; account?: AccountSummary; roles: string[]; firstAccount: boolean; busy: boolean;
-  refresh: () => Promise<void>; close?: () => void;
+  refresh: () => Promise<void>; close: () => void;
 }) {
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState("");
 
-  return <form className="settings-form" aria-label={person ? person.name + " bearbeiten" : "Person hinzufügen"} onSubmit={async (event) => {
+  return <form className="settings-form" aria-label={person ? person.name + " bearbeiten" : "Benutzer hinzufügen"} onSubmit={async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const fields = new FormData(form);
@@ -95,13 +98,13 @@ function PersonForm({ person, account, roles, firstAccount, busy, refresh, close
       await sendAuth({ action: "person-account", owner: person?.id, name: fields.get("name"), role: fields.get("role"), username: fields.get("username"), password });
       form.reset();
       await refresh().catch(() => { throw new Error("Die Person wurde gespeichert. Der Arbeitsbereich konnte nicht neu geladen werden."); });
-      close?.();
+      close();
     } catch (error) {
       setProblem(error instanceof Error ? error.message : "Die Person konnte nicht gespeichert werden.");
     } finally { setSaving(false); }
   }}>
     <div className="fields">
-      <label className="form-field">Name<input name="name" maxLength={120} defaultValue={person?.name} required /></label>
+      <label className="form-field">Name<input name="name" maxLength={120} defaultValue={person?.name} required autoFocus /></label>
       <Choice label="Rolle" name="role" value={person?.role} options={roles} />
       <label className="form-field">Benutzername<input name="username" autoComplete="off" autoCapitalize="none" minLength={3} maxLength={48} defaultValue={account?.username} required /></label>
       <label className="form-field">{account ? "Neues Passwort (optional)" : "Passwort"}<input name="password" type="password" autoComplete="new-password" minLength={15} maxLength={128} required={!account} /></label>
@@ -109,8 +112,8 @@ function PersonForm({ person, account, roles, firstAccount, busy, refresh, close
     </div>
     <p className="form-help">Passwort mit mindestens 15 Zeichen. {firstAccount && "Das erste Konto erhält Administratorrechte und schützt den Arbeitsbereich mit einer Anmeldung."}</p>
     {problem && <p className="notice error" role="alert">{problem}</p>}
-    <div className="inline-actions"><button className="button primary" disabled={busy || saving}>{person ? "Person speichern" : "Person hinzufügen"}</button>
-      {close && <button type="button" className="button" disabled={saving} onClick={close}>Abbrechen</button>}</div>
+    <div className="inline-actions"><button className="button primary" disabled={busy || saving}>{person ? "Person speichern" : "Benutzer speichern"}</button>
+      <button type="button" className="button" disabled={saving} onClick={close}>Abbrechen</button></div>
   </form>;
 }
 
