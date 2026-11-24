@@ -264,7 +264,7 @@ export default function Cockpit() {
           <section className="card table-card"><div className="card-heading"><div><h3>Kanäle im Vergleich</h3><p>Direktvertrieb im ausgewählten Zeitraum</p></div><button className="text-button" onClick={() => move("campaign")}>Kampagnen <ArrowRight size={16} /></button></div><ChannelTable metrics={visible} channelOptions={channelOptions} /></section>
         </> : <>
           <div className="page-heading"><div><h1>{headings[page][0]}</h1><p>{headings[page][1]}</p></div>{page !== "settings" && <div className="page-actions">
-            {page === "review" ? <><button className="button" onClick={() => move("settings")}><Link2 size={16} /> Live-Abruf einrichten</button><button className="button" onClick={() => open({ type: "import", dataset: "reviews" })}><Download size={16} /> Bewertungen importieren</button>
+            {page === "review" ? <><button className="button" onClick={() => move("settings")}><Link2 size={16} /> Live-Abruf einrichten</button><button className="button" onClick={() => open({ type: "import", dataset: "reviews" })}><Download size={16} /> Importieren</button>
               {reviewSources.map((source) => <button key={source.id} className="button" disabled={busy} onClick={async () => {
                 const result = await action({ action: "sync", id: source.id }, source.name + " abgeglichen.");
                 const detail = result && result.connections.find((connection) => connection.id === source.id)?.last_result;
