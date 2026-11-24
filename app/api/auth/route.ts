@@ -31,13 +31,13 @@ export async function POST(request: NextRequest) {
       }
       return response;
     }
-    if (body.action === "login" || body.action === "account") {
+    const accountAction = body.action === "account" || body.action === "person-account";
+    if (body.action === "login" || accountAction) {
       await throttleAuth("address:" + requestAddress(request), 50);
-    }
-    if (body.action === "login" || body.action === "account") {
-      const access = body.action === "account" ? await requestAccess(request) : undefined;
-      if (body.action === "account" && (!access || access.role === "member")) return send({ error: "Hierfür ist ein Administratorkonto erforderlich." }, 403);
-      const result = access ? await saveAccount(access, body.owner, body.username, body.password) : await login(body.username, body.password);
+      const access = accountAction ? await requestAccess(request) : undefined;
+      if (accountAction && (!access || access.role === "member")) return send({ error: "Hierfür ist ein Administratorkonto erforderlich." }, 403);
+      const personChange = body.action === "person-account" ? { name: body.name, role: body.role } : undefined;
+      const result = access ? await saveAccount(access, body.owner, body.username, body.password, personChange) : await login(body.username, body.password);
       const response = send({ ok: true });
       if (result.token) {
         setAuthenticationCookie(response, result.token);

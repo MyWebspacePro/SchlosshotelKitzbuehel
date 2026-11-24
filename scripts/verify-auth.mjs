@@ -83,15 +83,20 @@ assert.equal(imageBytes.status, 200);
 assert.match(imageBytes.headers.get("content-type"), /image\/webp/);
 assert.deepEqual(Buffer.from(await imageBytes.arrayBuffer()), await readFile(new URL("../public/brand/spa.webp", import.meta.url)));
 
-await post(root, "/api/auth", { action: "account", owner: "team-content", username: member, password: memberPassword });
+await post(root, "/api/auth", { action: "person-account", name: "Doppelter Zugang " + unique, role: "Marketing", username: admin, password: memberPassword }, 400);
+assert.ok(!(await root.send("/api/workspace")).owners.some((person) => person.name === "Doppelter Zugang " + unique));
+await post(root, "/api/auth", { action: "person-account", owner: "team-content", name: "Content Teammitglied " + unique,
+  role: "Content & Redaktion", username: member, password: memberPassword });
 await post(worker, "/api/auth", { action: "login", username: member.toUpperCase(), password: memberPassword });
 const shared = await worker.send("/api/workspace");
 assert.equal(shared.identity.role, "member");
+assert.equal(shared.identity.name, "Content Teammitglied " + unique);
 assert.equal(shared.accounts.length, 0);
 assert.ok(shared.records.some((record) => record.data.title === uniqueTask));
 await worker.send(pdf);
 await worker.send(file.file);
 await post(worker, "/api/auth", { action: "account", owner: "team-tech", username: member + "-2", password: memberPassword }, 403);
+await post(worker, "/api/auth", { action: "person-account", name: "Gesperrte Änderung", username: member + "-2", password: memberPassword }, 403);
 await post(worker, "/api/workspace", { action: "owner-setting", id: "team-tech", active: false }, 403);
 await post(worker, "/api/workspace", { action: "connection-setting", id: "google", mode: "off" }, 403);
 await root.send("/api/auth", { method: "POST", body: '{"action":"logout"}', headers: { "Content-Type": "application/json", Origin: "https://external.example" } }, 403);

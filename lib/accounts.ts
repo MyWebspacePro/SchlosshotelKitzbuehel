@@ -1,4 +1,4 @@
-import { database, InputError, workspaceTransaction } from "./store";
+import { database, InputError, saveOwner, workspaceTransaction } from "./store";
 import type { AccountSummary, WorkspaceIdentity } from "./model";
 import { digest, hashPassword, sessionToken, verifyPassword } from "./passwords";
 
@@ -98,9 +98,9 @@ export async function logout(token: string | undefined) {
   await query("DELETE FROM hotel_session WHERE token_hash=$1", [digest(token)]);
 }
 
-export async function saveAccount(access: Access, owner: unknown, usernameValue: unknown, passwordValue: unknown) {
+export async function saveAccount(access: Access, ownerValue: unknown, usernameValue: unknown, passwordValue: unknown, personChange?: { name: unknown; role: unknown }) {
   if (access.role === "member") throw new AuthenticationError();
-  if (typeof owner !== "string" || !/^[a-z0-9-]{1,64}$/.test(owner)) throw new InputError("Wähle eine Person aus der Liste.");
+  if (!(ownerValue === undefined && personChange) && (typeof ownerValue !== "string" || !/^[a-z0-9-]{1,64}$/.test(ownerValue))) throw new InputError("Wähle eine Person aus der Liste.");
   const { username, password } = credentials(usernameValue, passwordValue, access.role === "guest");
   const db = await database();
   const passwordHash = password ? await hashPassword(password) : null;
@@ -115,6 +115,7 @@ export async function saveAccount(access: Access, owner: unknown, usernameValue:
         WHERE token_hash=$1 AND session.workspace=$2 AND account.admin AND session.expires_at>now()`, [access.tokenHash, access.id]);
       if (!admin.rows.length) throw new AuthenticationError();
     }
+    const owner = personChange ? await saveOwner(query, access.id, { id: ownerValue, ...personChange }) : ownerValue as string;
     const person = await query("SELECT 1 FROM hotel_owner WHERE workspace=$1 AND id=$2 AND active", [access.id, owner]);
     if (!person.rows.length) throw new InputError("Wähle eine aktive Person aus der Liste.");
     const existing = (await query<AccountSummary>("SELECT owner,username,admin FROM hotel_account WHERE workspace=$1 AND owner=$2", [access.id, owner])).rows[0];

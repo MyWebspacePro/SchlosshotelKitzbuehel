@@ -505,28 +505,37 @@ export async function perform(id: string, body: Record<string, unknown>, runId?:
   return readWorkspace(db.query, id);
 }
 
+export async function saveOwner(query: Query, id: string, body: Record<string, unknown>, existingOwners?: OwnerOption[]) {
+  const owners = existingOwners ?? (await query<OwnerOption>("SELECT id,name,role,active FROM hotel_owner WHERE workspace=$1", [id])).rows;
+  const owner = owners.find((person) => person.id === body.id);
+  if (body.id !== undefined && !owner) throw new InputError("Diese Person wurde nicht gefunden.");
+  const name = text(body.name ?? owner?.name, "Name", 120).replace(/\s+/g, " ");
+  const role = text(body.role ?? owner?.role ?? "", "Rolle", 100);
+  if (!name) throw new InputError("Gib den Namen der Person ein.");
+  if (role && !ownerRoleOptions(owners).includes(role)) throw new InputError("Wähle eine Rolle aus der Liste.");
+  if (owners.some((person) => person.id !== owner?.id && person.name.toLowerCase() === name.toLowerCase())) throw new InputError("Diese Person ist bereits eingetragen.");
+  if (body.active !== undefined && typeof body.active !== "boolean") throw new InputError("Der Personenstatus ist ungültig.");
+  if (owner) {
+    if (body.active === false) {
+      const admin = await query("SELECT 1 FROM hotel_account WHERE workspace=$1 AND owner=$2 AND admin", [id, owner.id]);
+      if (admin.rows.length) throw new InputError("Das Administratorkonto kann hier nicht deaktiviert werden.");
+      await query("DELETE FROM hotel_session WHERE workspace=$1 AND owner=$2", [id, owner.id]);
+    }
+    await query("UPDATE hotel_owner SET name=$3,name_key=lower($3),role=$4,active=$5 WHERE workspace=$1 AND id=$2", [id, owner.id, name, role, body.active ?? owner.active]);
+    if (name !== owner.name) await query(`UPDATE hotel_record SET data=jsonb_set(data,'{owner}',to_jsonb($3::text)),updated_at=now()
+      WHERE workspace=$1 AND data->>'ownerId'=$2`, [id, owner.id, name]);
+    return owner.id;
+  }
+  const ownerId = randomUUID();
+  await query("INSERT INTO hotel_owner (workspace,id,name,name_key,role) VALUES ($1,$2,$3,lower($3),$4)", [id, ownerId, name, role]);
+  return ownerId;
+}
+
 async function performAction(query: Query, id: string, body: Record<string, unknown>, runId?: string) {
   const state = await readWorkspace(query, id);
   const item = state.records.find((r) => r.id === body.id);
   if (body.action === "owner-setting") {
-    const owner = state.owners.find((person) => person.id === body.id);
-    if (body.id && !owner) throw new InputError("Diese Person wurde nicht gefunden.");
-    const name = text(body.name ?? owner?.name, "Name", 120).replace(/\s+/g, " ");
-    const role = text(body.role ?? owner?.role ?? "", "Rolle", 100);
-    if (!name) throw new InputError("Gib den Namen der Person ein.");
-    if (role && !ownerRoleOptions(state.owners).includes(role)) throw new InputError("Wähle eine Rolle aus der Liste.");
-    if (state.owners.some((person) => person.id !== owner?.id && person.name.toLowerCase() === name.toLowerCase())) throw new InputError("Diese Person ist bereits eingetragen.");
-    if (body.active !== undefined && typeof body.active !== "boolean") throw new InputError("Der Personenstatus ist ungültig.");
-    if (owner) {
-      if (body.active === false) {
-        const admin = await query("SELECT 1 FROM hotel_account WHERE workspace=$1 AND owner=$2 AND admin", [id, owner.id]);
-        if (admin.rows.length) throw new InputError("Das Administratorkonto kann hier nicht deaktiviert werden.");
-        await query("DELETE FROM hotel_session WHERE workspace=$1 AND owner=$2", [id, owner.id]);
-      }
-      await query("UPDATE hotel_owner SET name=$3,name_key=lower($3),role=$4,active=$5 WHERE workspace=$1 AND id=$2", [id, owner.id, name, role, body.active ?? owner.active]);
-      if (name !== owner.name) await query(`UPDATE hotel_record SET data=jsonb_set(data,'{owner}',to_jsonb($3::text)),updated_at=now()
-        WHERE workspace=$1 AND data->>'ownerId'=$2`, [id, owner.id, name]);
-    } else await query("INSERT INTO hotel_owner (workspace,id,name,name_key,role) VALUES ($1,$2,$3,lower($3),$4)", [id, randomUUID(), name, role]);
+    await saveOwner(query, id, body, state.owners);
   } else if (body.action === "connection-setting") {
     const connection = state.connections.find((entry) => entry.id === body.id);
     if (body.id !== undefined && !connection) throw new InputError("Diese Verbindung wurde nicht gefunden.");

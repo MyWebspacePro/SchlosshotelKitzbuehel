@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { Plus, UserRound } from "lucide-react";
 import ChannelSettings from "./channel-settings";
-import { AccountForm } from "./team-access";
+import { sendAuth } from "./team-access";
 import { Choice } from "./form-fields";
-import { connectionCategories, isCustomConnection, ownerRoleOptions, type Connection, type ConnectionMode, type OwnerOption, type WorkspaceResponse } from "../lib/model";
+import { connectionCategories, isCustomConnection, ownerRoleOptions, type AccountSummary, type Connection, type ConnectionMode, type OwnerOption, type WorkspaceResponse } from "../lib/model";
 
 type SettingsAction = (payload: Record<string, unknown>, message: string) => Promise<boolean>;
 const providers: Record<string, { title?: string; account: string; help: string }> = {
@@ -17,7 +17,6 @@ export const connectionModeLabel: Record<ConnectionMode, string> = { example: "B
 
 export default function WorkspaceSettings({ data, busy, save, refresh }: { data: WorkspaceResponse; busy: boolean; save: SettingsAction; refresh: () => Promise<void> }) {
   const [editing, setEditing] = useState<string>();
-  const [accountEditing, setAccountEditing] = useState<string>();
   const [connection, setConnection] = useState<string>();
   const [addingService, setAddingService] = useState(false);
   const canManage = data.identity.role !== "member";
@@ -28,23 +27,16 @@ export default function WorkspaceSettings({ data, busy, save, refresh }: { data:
     <section className="card panel settings-panel">
       <div className="card-heading"><div><h3>Personen, Zuständigkeiten & Zugänge</h3><p>Verwalte Aufgabenverantwortliche und ihre Benutzerkonten.</p></div><UserRound size={19} /></div>
       {!canManage && <p className="form-help">Benutzerkonten und Einstellungen werden vom Administrator verwaltet.</p>}
-      {canManage && <PersonForm roles={roles} busy={busy} submit={async (data) => save({ action: "owner-setting", ...data }, "Person gespeichert.")} />}
+      {canManage && <PersonForm roles={roles} firstAccount={firstAccount} busy={busy} save={save} refresh={refresh} />}
       <ul className="settings-list">
         {data.owners.map((person) => {
           const account = data.accounts.find((entry) => entry.owner === person.id);
           return <li key={person.id} className="settings-row">
-          {editing === person.id ? <PersonForm person={person} roles={roles} busy={busy} cancel={() => setEditing(undefined)} submit={async (change) => {
-            const saved = await save({ action: "owner-setting", id: person.id, ...change }, "Person gespeichert.");
-            if (saved) setEditing(undefined);
-            return saved;
-          }} /> : accountEditing === person.id ? <div className="settings-account"><strong>{person.name}</strong><AccountForm key={person.id} owner={person.id} account={account} first={firstAccount} onClose={() => setAccountEditing(undefined)} onSaved={async () => {
-            await refresh();
-            setAccountEditing(undefined);
-          }} /></div> : <>
+          {editing === person.id ? <PersonForm person={person} account={account} roles={roles} firstAccount={firstAccount}
+            busy={busy} save={save} refresh={refresh} close={() => setEditing(undefined)} /> : <>
             <div><strong>{person.name}</strong><small>{[person.role, person.active ? "Aktiv" : "Inaktiv"].filter(Boolean).join(" · ")}</small>
               {canManage && <small>{account ? (account.admin ? "Administrator" : "Benutzerkonto") + " · " + account.username : "Ohne Benutzerkonto"}</small>}</div>
             <div className="inline-actions"><button type="button" className="button" disabled={!canManage} onClick={() => setEditing(person.id)}>Bearbeiten</button>
-              <button type="button" className="button" disabled={busy || !canManage || !person.active} onClick={() => setAccountEditing(person.id)}>{account ? "Konto bearbeiten" : "Benutzerkonto einrichten"}</button>
               <button type="button" className="button" disabled={busy || !canManage || account?.admin} onClick={() => save({ action: "owner-setting", id: person.id, active: !person.active }, "Person gespeichert.")}>{person.active ? "Deaktivieren" : "Aktivieren"}</button></div>
           </>}
         </li>;
@@ -81,18 +73,62 @@ export default function WorkspaceSettings({ data, busy, save, refresh }: { data:
   </>;
 }
 
-function PersonForm({ person, roles, busy, submit, cancel }: {
-  person?: OwnerOption; roles: string[]; busy: boolean; submit: (data: Record<string, FormDataEntryValue>) => Promise<boolean>; cancel?: () => void;
+function PersonForm({ person, account, roles, firstAccount, busy, save, refresh, close }: {
+  person?: OwnerOption; account?: AccountSummary; roles: string[]; firstAccount: boolean; busy: boolean;
+  save: SettingsAction; refresh: () => Promise<void>; close?: () => void;
 }) {
-  return <form className="settings-form" onSubmit={async (event) => {
+  const [includeAccount, setIncludeAccount] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [problem, setProblem] = useState("");
+  const canSetAccount = person?.active !== false;
+  const showAccount = canSetAccount && (Boolean(account) || includeAccount);
+
+  return <form className="settings-form" aria-label={person ? person.name + " bearbeiten" : "Person hinzufügen"} onSubmit={async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
-    if (await submit(Object.fromEntries(new FormData(form))) && !person) form.reset();
+    const fields = new FormData(form);
+    const name = fields.get("name");
+    const role = fields.get("role");
+    setProblem("");
+    setSaving(true);
+    try {
+      if (showAccount) {
+        const password = fields.get("password");
+        if (password !== fields.get("confirmation")) {
+          setProblem("Die Passwörter stimmen nicht überein.");
+          return;
+        }
+        await sendAuth({ action: "person-account", owner: person?.id, name, role, username: fields.get("username"), password });
+        form.reset();
+        setIncludeAccount(false);
+        await refresh().catch(() => { throw new Error("Die Person wurde gespeichert. Der Arbeitsbereich konnte nicht neu geladen werden."); });
+      } else if (!await save({ action: "owner-setting", id: person?.id, name, role }, "Person gespeichert.")) {
+        return;
+      }
+      if (close) close();
+      else form.reset();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : "Die Person konnte nicht gespeichert werden.");
+    } finally { setSaving(false); }
   }}>
-    <label className="form-field">Name<input name="name" maxLength={120} defaultValue={person?.name} required /></label>
-    <Choice label="Rolle" name="role" value={person?.role} options={roles} />
-    <div className="inline-actions"><button className="button primary" disabled={busy}>{person ? "Person speichern" : "Person hinzufügen"}</button>
-      {cancel && <button type="button" className="button" onClick={cancel}>Abbrechen</button>}</div>
+    <div className="fields">
+      <label className="form-field">Name<input name="name" maxLength={120} defaultValue={person?.name} required /></label>
+      <Choice label="Rolle" name="role" value={person?.role} options={roles} />
+    </div>
+    {!account && canSetAccount && <label className="person-account-toggle"><input type="checkbox" checked={includeAccount}
+      disabled={saving || busy} onChange={(event) => setIncludeAccount(event.target.checked)} /> Benutzerkonto einrichten</label>}
+    {showAccount && <fieldset className="person-account-fields">
+      <legend>Benutzerkonto</legend>
+      <label className="form-field">Benutzername<input name="username" autoComplete="off" autoCapitalize="none" minLength={3} maxLength={48} defaultValue={account?.username} required /></label>
+      <div className="fields">
+        <label className="form-field">{account ? "Neues Passwort (optional)" : "Passwort"}<input name="password" type="password" autoComplete="new-password" minLength={15} maxLength={128} required={!account} /></label>
+        <label className="form-field">Passwort wiederholen<input name="confirmation" type="password" autoComplete="new-password" maxLength={128} required={!account} /></label>
+      </div>
+      <p className="form-help">Mindestens 15 Zeichen. {firstAccount && "Das erste Konto erhält Administratorrechte und schützt den Arbeitsbereich mit einer Anmeldung."}</p>
+    </fieldset>}
+    {problem && <p className="notice error" role="alert">{problem}</p>}
+    <div className="inline-actions"><button className="button primary" disabled={busy || saving}>{person ? "Person speichern" : "Person hinzufügen"}</button>
+      {close && <button type="button" className="button" disabled={saving} onClick={close}>Abbrechen</button>}</div>
   </form>;
 }
 
