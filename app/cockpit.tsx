@@ -265,8 +265,12 @@ export default function Cockpit() {
         </> : <>
           <div className="page-heading"><div><h1>{headings[page][0]}</h1><p>{headings[page][1]}</p></div>{page !== "settings" && <div className="page-actions">
             {page === "review" ? <><button className="button" onClick={() => move("settings")}><Link2 size={16} /> Live-Abruf einrichten</button><button className="button" onClick={() => open({ type: "import", dataset: "reviews" })}><Download size={16} /> Bewertungen importieren</button>
-              {reviewSources.map((source) => <button key={source.id} className="button primary" disabled={busy} onClick={() => action({ action: "sync", id: source.id }, source.name + " abgeglichen.")}>
-                <RefreshCw size={16} /> {source.id === "google" ? "Google" : source.name} {source.mode === "live" ? "abrufen" : "Beispiele laden"}</button>)}</>
+              {reviewSources.map((source) => <button key={source.id} className="button primary" disabled={busy} onClick={async () => {
+                const result = await action({ action: "sync", id: source.id }, source.name + " abgeglichen.");
+                const detail = result && result.connections.find((connection) => connection.id === source.id)?.last_result;
+                if (detail) setMessage(source.name + " · " + detail + ".");
+              }}>
+                <RefreshCw size={16} /> {source.id === "google" ? "Google" : source.id === "booking" ? "Booking" : source.name}</button>)}</>
             : page === "connections" ? <button className="button primary" onClick={() => open({ type: "import" })}><Plus size={17} /> Daten importieren</button>
             : page === "report" ? <button className="button primary" onClick={() => open({ type: "report" })}><Plus size={17} /> Bericht erstellen</button>
             : page === "content" ? <><button className="button" disabled={!data} onClick={() => setDraftFormat("website")}><Plus size={17} /> Website-Angebot</button><button className="button" disabled={!data} onClick={() => setDraftFormat("newsletter")}><Plus size={17} /> Newsletter</button><button className="button primary" disabled={!data} onClick={() => setDraftFormat("instagram")}><Plus size={17} /> Instagram-Carousel</button></>

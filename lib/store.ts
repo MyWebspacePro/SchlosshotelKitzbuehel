@@ -798,13 +798,16 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
     const kind = kindBySource[connection.id];
     const records = kind ? examples.filter(([, type, d]) => type === kind && (type !== "review" || d.channel === connection.name) &&
       (type !== "offer" || d.source === connection.name)) : [];
+    let inserted = 0;
     if (records.length) {
-      await query(`INSERT INTO hotel_record (workspace,id,kind,data)
+      const added = await query<{ id: string }>(`INSERT INTO hotel_record (workspace,id,kind,data)
         SELECT $1,r.id,r.kind,r.data FROM jsonb_to_recordset($2::jsonb) AS r(id text, kind text, data jsonb)
-        WHERE NOT EXISTS (SELECT 1 FROM hotel_deleted_record WHERE workspace=$1 AND id=r.id) ON CONFLICT DO NOTHING`,
+        WHERE NOT EXISTS (SELECT 1 FROM hotel_deleted_record WHERE workspace=$1 AND id=r.id) ON CONFLICT DO NOTHING RETURNING id`,
         [id, JSON.stringify(records.map(([record, type, data]) => ({ id: record, kind: type, data })))]);
+      inserted = added.rows.length;
     }
-    const result = (metricRows.length || records.length) + (metricRows.length ? " Kennzahlenzeilen abgeglichen" : kind === "review" ? " Bewertungen abgeglichen" : kind === "offer" ? " Angebote abgeglichen" : " Budgetpositionen abgeglichen");
+    const result = kind === "review" ? (inserted ? inserted + (inserted === 1 ? " neue Bewertung" : " neue Bewertungen") : "Keine neuen Bewertungen") :
+      (metricRows.length || records.length) + (metricRows.length ? " Kennzahlenzeilen abgeglichen" : kind === "offer" ? " Angebote abgeglichen" : " Budgetpositionen abgeglichen");
     await query("UPDATE hotel_connection SET last_sync=now(),last_result=$3 WHERE workspace=$1 AND id=$2", [id, connection.id, result]);
   } else if (body.action === "schedule") {
     const hours = amount(body.hours, "Intervall", true);
