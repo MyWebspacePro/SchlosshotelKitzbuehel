@@ -723,7 +723,7 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
       if (!result.rows.length) throw new InputError("Der Status hat sich geändert. Lade den Eintrag neu.");
     }
   } else if (body.action === "delete") {
-    if (!item || (!editable.includes(item.kind) && item.kind !== "report")) throw new InputError("Dieser Eintrag kann nicht gelöscht werden.");
+    if (!item || item.kind === "review" || (!editable.includes(item.kind) && item.kind !== "report")) throw new InputError("Dieser Eintrag kann nicht gelöscht werden.");
     await query(`WITH removed AS (
         DELETE FROM hotel_record WHERE workspace=$1 AND id=$2 AND kind=$3 RETURNING id
       ), remember AS (

@@ -39,7 +39,7 @@ const deleteLabels: Partial<Record<Kind, [string, string]>> = {
   campaign: ["Kampagne", "Die zugehörigen Kampagnenmesswerte werden entfernt. Verknüpfte Beiträge und Aufgaben bleiben erhalten."],
   offer: ["Angebot", "Kampagnen, Beiträge und Prüfeinträge bleiben erhalten. Ihre Verknüpfung mit diesem Angebot wird gelöst."],
   content: ["Beitrag", "Der Versionsverlauf des Beitrags wird ebenfalls gelöscht."],
-  task: ["Aufgabe", ""], review: ["Bewertung", ""], agency: ["Agenturbudget", ""], report: ["Bericht", ""],
+  task: ["Aufgabe", ""], agency: ["Agenturbudget", ""], report: ["Bericht", ""],
   system: ["Vorgang", ""], guide: ["Anleitung", ""], solution: ["Bewertung der Lösung", ""],
   brand: ["Markenprofil", ""], profile: ["Portalprofil", ""]
 };
