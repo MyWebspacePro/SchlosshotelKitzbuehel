@@ -672,6 +672,7 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
       if (raw.observedAvailability !== undefined) data.observedAvailability = String(raw.observedAvailability) === "" ? undefined : available(String(raw.observedAvailability));
     }
     if (kind === "profile") {
+      if (item && data.source !== item.data.source) throw new InputError("Das Portal eines bestehenden Profils kann nicht geändert werden.");
       if (!data.source || !data.url || !state.connections.some((connection) => connection.name === data.source)) throw new InputError("Wähle ein vorhandenes Portal und gib die Profil-URL an.");
       data.status = "Zu prüfen";
     }
