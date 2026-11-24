@@ -116,7 +116,6 @@ td:first-child { font-weight: 650; }
 .record-row:hover:not(.static), .selected-row { background: #f9f0f3; }
 .record-row > div { flex: 1; min-width: 0; }
 .record-row strong, .record-row small { display: block; overflow-wrap: anywhere; }
-.record-row strong svg { display: inline-block; color: var(--gold); margin-right: 4px; }
 .record-row small { margin-top: 4px; color: var(--muted); font-size: 11px; }
 .agency-channels { min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 8px 11px; margin: 7px 0 12px; }
 .agency-channels legend { padding: 0 4px; color: var(--wine); font-size: 12px; font-weight: 700; }

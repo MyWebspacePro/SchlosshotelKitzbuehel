@@ -5,7 +5,7 @@ import {
   Activity, ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, BarChart3, CalendarDays,
   Check, ChevronDown, CircleAlert, ClipboardList, Download, Euro, Globe, Image as ImageIcon,
   LayoutGrid, LineChart, Link2, Megaphone, Menu, MessageSquare, MousePointer2,
-  Plus, RefreshCw, Search, Settings, Sparkles, Star, X
+  Plus, RefreshCw, Search, Settings, Sparkles, X
 } from "lucide-react";
 import ContentStudio, { contentFormat, type ContentFormat } from "./content-studio";
 import CampaignCalendar from "./campaign-calendar";
@@ -465,7 +465,7 @@ function RecordRow({ item, onClick, current, channelOptions = [] }: { item: Reco
     d.stars && d.stars + " von 5"
   ].filter(Boolean).join(" · ");
   return <button className={"record-row " + (current ? "selected-row" : "")} onClick={onClick}>
-    <div><strong>{d.stars && <Star size={15} />} {d.title}</strong><small>{detail || d.description}</small>{item.kind === "review" && d.description && <p className="review-excerpt">{d.description}</p>}</div>
+    <div><strong>{d.title}</strong><small>{detail || d.description}</small>{item.kind === "review" && d.description && <p className="review-excerpt">{d.description}</p>}</div>
     {pill(d.status)}<ArrowRight size={16} />
   </button>;
 }
