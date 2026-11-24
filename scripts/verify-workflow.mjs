@@ -73,7 +73,15 @@ const portalReviews = { action: "import", dataset: "reviews", rows: [{ id: "qa-r
 state = await requestWorkspace(portalReviews);
 const importedReview = state.records.find((entry) => entry.kind === "review" && entry.data.channel === service.name);
 assert.equal(importedReview?.data.source, "Dateiimport");
-await requestWorkspace({ action: "delete", id: importedReview.id });
+await requestWorkspace({ action: "delete", id: importedReview.id }, 400);
+const approvedResponse = "Vielen Dank für Ihre Rückmeldung.";
+await requestWorkspace({ action: "save", kind: "review", id: importedReview.id, data: { status: "Freigegeben", response: approvedResponse } });
+await requestWorkspace({ action: "save", kind: "review", id: importedReview.id, data: { status: "Entwurf", response: "Geänderte Antwort" } }, 400);
+await requestWorkspace({ action: "draft", id: importedReview.id }, 400);
+state = await requestWorkspace();
+const lockedReview = state.records.find((entry) => entry.id === importedReview.id);
+assert.equal(lockedReview?.data.status, "Freigegeben");
+assert.equal(lockedReview?.data.response, approvedResponse);
 state = await requestWorkspace({ action: "connection-setting", id: service.id, mode: "off", account: "qa-02" });
 assert.equal(state.connections.find((entry) => entry.id === service.id).account, "qa-02");
 await requestWorkspace(portalReviews, 400);
