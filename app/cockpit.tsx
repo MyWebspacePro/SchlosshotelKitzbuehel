@@ -52,7 +52,7 @@ const statuses: Partial<Record<Kind, string[]>> = {
 const headings: Record<Exclude<Page, "home">, [string, string]> = {
   campaign: ["Kampagnen", "Plane Maßnahmen und vergleiche die Leistung deiner Vertriebskanäle."],
   offer: ["Website & Direktvertrieb", "Prüfe veröffentlichte Angebote gegen die Daten deiner Buchungsquellen."],
-  content: ["Content-Studio", "Erstelle und prüfe Instagram-Carousels und Newsletter."],
+  content: ["Content-Studio", "Erstelle und prüfe Website-Angebote, Instagram-Carousels und Newsletter."],
   review: ["Bewertungen", "Übernimm Gästebewertungen aus Google und Booking.com und bearbeite die Antworten."],
   task: ["Aufgaben", "Verfolge Auffälligkeiten, Freigaben und technische Maßnahmen."],
   report: ["Berichte", "Wähle einen Berichtstyp oder öffne einen gespeicherten Bericht."],
@@ -264,7 +264,7 @@ export default function Cockpit() {
                 <RefreshCw size={16} /> {source.id === "google" ? "Google" : source.name} {source.mode === "live" ? "abrufen" : "Beispiele laden"}</button>)}</>
             : page === "connections" ? <button className="button primary" onClick={() => open({ type: "import" })}><Plus size={17} /> Daten importieren</button>
             : page === "report" ? <button className="button primary" onClick={() => open({ type: "report" })}><Plus size={17} /> Bericht erstellen</button>
-            : page === "content" ? <><button className="button" disabled={!data} onClick={() => setDraftFormat("newsletter")}><Plus size={17} /> Newsletter</button><button className="button primary" disabled={!data} onClick={() => setDraftFormat("instagram")}><Plus size={17} /> Instagram-Carousel</button></>
+            : page === "content" ? <><button className="button" disabled={!data} onClick={() => setDraftFormat("website")}><Plus size={17} /> Website-Angebot</button><button className="button" disabled={!data} onClick={() => setDraftFormat("newsletter")}><Plus size={17} /> Newsletter</button><button className="button primary" disabled={!data} onClick={() => setDraftFormat("instagram")}><Plus size={17} /> Instagram-Carousel</button></>
             : page === "offer" ? <><button className="button" onClick={() => open({ type: "import", dataset: "offers" })}>Angebote importieren</button><button className="button" onClick={() => open({ type: "edit", kind: "offer" })}><Plus size={17} /> Angebot</button><button className="button primary" disabled={busy || !offers.length} onClick={() => action({ action: "check" }, "Angebotsprüfung abgeschlossen.")}><Activity size={17} /> Prüfung starten</button></>
             : page === "agency" ? <><button className="button" onClick={() => open({ type: "import", dataset: "agency" })}>Budgets importieren</button><button className="button primary" onClick={() => open({ type: "edit", kind: "agency" })}><Plus size={17} /> Agentur anlegen</button></>
             : <button className="button primary" onClick={() => open({ type: "edit", kind: page })}><Plus size={17} /> {page === "campaign" ? "Kampagne" : "Aufgabe"} anlegen</button>}
@@ -302,7 +302,7 @@ export default function Cockpit() {
               {!records.some((r) => r.kind === "solution") && <Empty>Bewertungen und Entscheidungen erscheinen hier.</Empty>}
             </section>
           </> : page === "content" ? <div className="studio-grid">
-            <section className="card panel studio-library"><div className="card-heading"><div><h3>Beiträge</h3><p>Instagram und Newsletter</p></div></div>
+            <section className="card panel studio-library"><div className="card-heading"><div><h3>Beiträge</h3><p>Website, Instagram und Newsletter</p></div></div>
               {visibleRecords.length === 0 && <Empty>Wähle oben ein Format.</Empty>}
               {visibleRecords.map((r) => <RecordRow key={r.id} item={r} channelOptions={channelOptions} onClick={() => { setDraftFormat(undefined); setSelected(r.id); }} current={activeItem?.id === r.id} />)}
             </section>

@@ -147,3 +147,17 @@ export async function newsletterZip(data: Data) {
   const zip = zipSync(files, { level: 0 });
   download("schlosshotel-newsletter.zip", new Uint8Array(zip), "application/zip");
 }
+
+export async function websiteCardZip(data: Data) {
+  const card = data.websiteCard;
+  if (!card || !data.title.trim() || !data.description.trim() || !card.image || !card.cta.trim() || !card.url || !URL.canParse(card.url) || new URL(card.url).protocol !== "https:") {
+    throw new Error("Für den Export benötigt die Kachel Titel, Beschreibung, Bild, Button-Text und eine HTTPS-Zieladresse.");
+  }
+  const { zipSync, strToU8 } = await import("fflate");
+  const html = '<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + escape(data.title) + '</title>' +
+    '<style>body{margin:0;padding:2rem;background:#f5f0ed;color:#371c2a;font-family:Arial,sans-serif}.angebot{max-width:430px;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 8px 30px #3211241a}.angebot img{width:100%;aspect-ratio:16/10;object-fit:cover;display:block}.inhalt{padding:1.5rem}.marke{font-size:.7rem;letter-spacing:.13em;color:#8c6273}.angebot h1{font:2rem Georgia,serif;margin:.7rem 0}.angebot p{line-height:1.6;white-space:pre-line}.preis{display:block;margin:1rem 0}.button{display:inline-block;background:#591d38;color:white;text-decoration:none;padding:.8rem 1.1rem;border-radius:4px}</style></head><body>' +
+    '<article class="angebot"><img src="angebotsbild.jpg" alt=""><div class="inhalt"><span class="marke">SCHLOSSHOTEL KITZBÜHEL</span><h1>' + escape(data.title) + '</h1><p>' + escape(data.description) + '</p>' +
+    (card.price ? '<strong class="preis">' + escape(card.price) + '</strong>' : '') + '<a class="button" href="' + escape(card.url) + '">' + escape(card.cta) + '</a></div></article></body></html>';
+  const files = { "angebot.html": strToU8(html), "angebotsbild.jpg": await emailImage(card.image, 1600, "image/jpeg") };
+  download("website-angebot.zip", new Uint8Array(zipSync(files, { level: 0 })), "application/zip");
+}

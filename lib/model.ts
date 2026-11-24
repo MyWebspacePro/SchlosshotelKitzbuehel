@@ -11,6 +11,7 @@ export type Slide = {
   id: string; title: string; text: string; image: string; layout: "editorial" | "photo";
   crop?: SlideCrop; palette?: keyof typeof slidePalettes;
 };
+export type WebsiteCard = { image: string; price: string; cta: string; url: string };
 export type Newsletter = { subject: string; preheader: string; image: string; cta: string; url: string };
 export const brandImages = [
   { file: "/brand/schlosshotel.webp", label: "Schlosshotel im Winter" }, { file: "/brand/spa.webp", label: "Außenpool" },
@@ -21,7 +22,7 @@ export type Data = {
   channels?: string[]; importReference?: string;
   due?: string; amount?: number; actual?: number; expected?: number; observed?: number;
   stars?: number; url?: string; response?: string; source?: string; related?: string; image?: string;
-  format?: "instagram" | "newsletter"; slides?: Slide[]; newsletter?: Newsletter;
+  format?: "instagram" | "newsletter" | "website"; slides?: Slide[]; newsletter?: Newsletter; websiteCard?: WebsiteCard;
   campaign?: string; start?: string; threshold?: number; briefLead?: number;
   room?: string; occupancy?: number; tariff?: string; availability?: boolean; observedAvailability?: boolean;
   benefit?: string; privacy?: string; feasibility?: string; decision?: string;

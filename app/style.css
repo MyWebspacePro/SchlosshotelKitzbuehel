@@ -429,3 +429,13 @@ footer { display: flex; gap: 12px; flex-wrap: wrap; justify-content: space-betwe
 .report-type-card strong { color:var(--wine); font-size:14px; }
 .report-type-detail { color:var(--muted); font-size:12px; line-height:1.4; }
 .report-type-arrow { grid-column:2; grid-row:1; align-self:start; color:var(--wine); }
+
+.website-card-preview { max-width:430px; margin:0 auto; overflow:hidden; border-radius:12px; background:white; box-shadow:0 8px 28px #32112418; }
+.website-card-preview > img, .website-card-placeholder { display:block; width:100%; aspect-ratio:16/10; object-fit:cover; }
+.website-card-placeholder { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:var(--wine); background:#eadde0; }
+.website-card-copy { padding:22px; color:#371c2a; }
+.website-card-copy small { color:#8c6273; font-size:10px; letter-spacing:.12em; }
+.website-card-copy h3 { margin:10px 0; font:28px/1.12 Georgia,serif; }
+.website-card-copy p { white-space:pre-wrap; line-height:1.6; }
+.website-card-copy strong { display:block; margin:14px 0; }
+.website-card-button { display:inline-block; margin-top:8px; padding:10px 15px; background:#591d38; color:white; border-radius:4px; font-size:12px; }

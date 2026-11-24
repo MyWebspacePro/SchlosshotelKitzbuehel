@@ -276,7 +276,7 @@ export async function deleteMedia(workspace: string, id: string) {
   return workspaceTransaction(db, workspace, async (query) => {
     const file = "/api/media/" + id;
     const references = await query<{ title: string }>(`SELECT data->>'title' AS title FROM hotel_record
-      WHERE workspace=$1 AND (data->>'image'=$2 OR data#>>'{newsletter,image}'=$2
+      WHERE workspace=$1 AND (data->>'image'=$2 OR data#>>'{newsletter,image}'=$2 OR data#>>'{websiteCard,image}'=$2
         OR data->'slides' @> jsonb_build_array(jsonb_build_object('image',$2::text)))
       ORDER BY title LIMIT 4`, [workspace, file]);
     if (references.rows.length) return { usedBy: references.rows.map((row) => row.title) };
@@ -626,9 +626,9 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
       data.url = url;
     }
     if (kind === "content" && raw.format !== undefined) {
-      if (raw.format !== "instagram" && raw.format !== "newsletter") throw new InputError("Das Format ist ungültig.");
+      if (raw.format !== "instagram" && raw.format !== "newsletter" && raw.format !== "website") throw new InputError("Das Format ist ungültig.");
       data.format = raw.format;
-      data.channel = raw.format === "instagram" ? "Instagram" : "Newsletter";
+      data.channel = raw.format === "instagram" ? "Instagram" : raw.format === "website" ? "Website" : "Newsletter";
       if (raw.format === "instagram") {
         if (!Array.isArray(raw.slides) || raw.slides.length < 1 || raw.slides.length > 20) throw new InputError("Ein Carousel braucht 1 bis 20 Slides.");
         data.slides = await Promise.all(raw.slides.map(async (slide) => ({
@@ -638,6 +638,15 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
         })));
         if (new Set(data.slides.map((slide) => slide.id)).size !== data.slides.length) throw new InputError("Die Slide-Reihenfolge ist ungültig.");
         if (data.status === "Freigegeben" && data.slides.some((slide) => !slide.image)) throw new InputError("Wähle vor der Freigabe für jeden Slide ein Bild.");
+      } else if (raw.format === "website") {
+        const card = raw.websiteCard;
+        if (!card) throw new InputError("Die Angebotskachel fehlt.");
+        const cta = text(card.cta, "Button-Text", 45);
+        const url = text(card.url, "Zieladresse", 500);
+        if (url && (!URL.canParse(url) || new URL(url).protocol !== "https:")) throw new InputError("Gib für den Website-Link eine HTTPS-Adresse ein.");
+        const image = await imagePath(query, id, card.image);
+        if (data.status === "Freigegeben" && (!image || !cta || !url)) throw new InputError("Für die Freigabe braucht die Angebotskachel ein Bild, einen Button-Text und eine Zieladresse.");
+        data.websiteCard = { image, price: text(card.price, "Preisangabe", 80), cta, url };
       } else {
         const mail = raw.newsletter;
         if (!mail) throw new InputError("Die Newsletterdaten fehlen.");

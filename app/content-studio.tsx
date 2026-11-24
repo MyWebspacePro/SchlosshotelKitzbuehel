@@ -1,13 +1,13 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Download, ImagePlus, Instagram, Mail, Plus, Save, Sparkles, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Download, ImagePlus, Instagram, Mail, Globe, Plus, Save, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { download, uploadPhoto } from "../lib/browser-files";
-import { carouselZip, drawSlideTextPanel, newsletterZip, renderSlide } from "../lib/content-export";
+import { carouselZip, drawSlideTextPanel, newsletterZip, websiteCardZip, renderSlide } from "../lib/content-export";
 import PicturePicker from "./picture-picker";
-import { brandImages, defaultSlideCrop, type ContentRevision, type Data, type MediaImage, type Newsletter, type RecordItem, type Slide, type SlideCrop } from "../lib/model";
+import { brandImages, defaultSlideCrop, type ContentRevision, type Data, type MediaImage, type Newsletter, type RecordItem, type Slide, type SlideCrop, type WebsiteCard } from "../lib/model";
 
-export type ContentFormat = "instagram" | "newsletter";
+export type ContentFormat = "instagram" | "newsletter" | "website";
 export const contentFormat = (item: RecordItem): ContentFormat => item.data.format ?? (item.data.channel === "Newsletter" ? "newsletter" : "instagram");
 const newSlide = (id: string, title = "", image = ""): Slide => ({ id, title, text: "", image, layout: "editorial" });
 const emptyMail: Newsletter = { subject: "", preheader: "", image: "", cta: "", url: "" };
@@ -38,18 +38,19 @@ export default function ContentStudio({ item, format, offers, campaigns, revisio
   const [campaign, setCampaign] = useState(existing?.campaign ?? "");
   const [slides, setSlides] = useState(existing?.slides ?? [newSlide("slide-1", existing?.title ?? "", existing ? brandImages[0].file : "")]);
   const [mail, setMail] = useState(existing?.newsletter ?? { ...emptyMail, subject: existing?.title ?? "", image: existing ? brandImages[0].file : "" });
+  const [card, setCard] = useState<WebsiteCard>(existing?.websiteCard ?? { image: "", price: "", cta: "Jetzt entdecken", url: "" });
   const [active, setActive] = useState(0);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState("");
   const [dirty, setDirty] = useState(false);
   const slide = slides[active] ?? slides[0];
-  const label = format === "instagram" ? "Instagram-Carousel" : "Newsletter";
+  const label = format === "instagram" ? "Instagram-Carousel" : format === "website" ? "Website-Angebot" : "Newsletter";
   const status = dirty ? "Ungespeichert" : existing?.status ?? "Neuer Entwurf";
   const editorData = (approved: boolean): Data => ({
-    title: title.trim() || (format === "instagram" ? slides.find((part) => part.title.trim())?.title || "Instagram-Carousel" : mail.subject.trim()),
+    title: title.trim() || (format === "instagram" ? slides.find((part) => part.title.trim())?.title || "Instagram-Carousel" : format === "website" ? "" : mail.subject.trim()),
     description: body, related, campaign, format, status: approved ? "Freigegeben" : "Entwurf",
-    channel: format === "instagram" ? "Instagram" : "Newsletter",
-    ...(format === "instagram" ? { slides } : { newsletter: mail })
+    channel: format === "instagram" ? "Instagram" : format === "website" ? "Website" : "Newsletter",
+    ...(format === "instagram" ? { slides } : format === "website" ? { websiteCard: card } : { newsletter: mail })
   });
 
   function patchSlide(id: string, patch: Partial<Slide>) {
@@ -57,12 +58,14 @@ export default function ContentStudio({ item, format, offers, campaigns, revisio
     setDirty(true);
   }
   function patchMail(patch: Partial<Newsletter>) { setMail((old) => ({ ...old, ...patch })); setDirty(true); }
+  function patchCard(patch: Partial<WebsiteCard>) { setCard((old) => ({ ...old, ...patch })); setDirty(true); }
   function clearDeletedMedia(path: string) {
     if (slides.some((slide) => slide.image === path)) {
       setSlides((old) => old.map((slide) => slide.image === path ? { ...slide, image: "", crop: undefined } : slide));
       setDirty(true);
     }
     if (mail.image === path) patchMail({ image: "" });
+    if (card.image === path) patchCard({ image: "" });
     onMediaDeleted(path);
   }
   function rearrange(index: number) {
@@ -83,7 +86,8 @@ export default function ContentStudio({ item, format, offers, campaigns, revisio
   async function commit(approved: boolean) {
     setError("");
     const values = editorData(approved);
-    if (!values.title) return setError("Gib dem Newsletter eine Überschrift oder einen Betreff.");
+    if (!values.title) return setError("Gib eine Überschrift ein.");
+    if (approved && format === "website" && (!body.trim() || !card.image || !card.cta.trim() || !card.url.trim())) return setError("Für die Freigabe braucht die Angebotskachel Text, Bild, Button-Text und Zieladresse.");
     if (approved && format === "instagram") {
       const missing = slides.findIndex((part) => !part.image);
       if (missing !== -1) { setActive(missing); return setError("Slide " + (missing + 1) + " braucht vor der Freigabe ein Bild."); }
@@ -95,8 +99,8 @@ export default function ContentStudio({ item, format, offers, campaigns, revisio
 
   return <section className="card studio-work">
     <header className="studio-head">
-      <div className="studio-format">{format === "instagram" ? <Instagram size={21} /> : <Mail size={21} />}</div>
-      <div><h2>{label}</h2><p>{format === "instagram" ? slides.length + (slides.length === 1 ? " Slide" : " Slides") + " · 1080 × 1350 px" : "E-Mail mit Betreff, Vorschautext und Titelbild"}</p></div>
+      <div className="studio-format">{format === "instagram" ? <Instagram size={21} /> : format === "website" ? <Globe size={21} /> : <Mail size={21} />}</div>
+      <div><h2>{label}</h2><p>{format === "instagram" ? slides.length + (slides.length === 1 ? " Slide" : " Slides") + " · 1080 × 1350 px" : format === "website" ? "Angebotskachel für die eigene Website" : "E-Mail mit Betreff, Vorschautext und Titelbild"}</p></div>
       <span className="pill">{status}</span>
     </header>
     {error && <div className="notice error studio-notice" role="alert">{error}</div>}
@@ -106,7 +110,21 @@ export default function ContentStudio({ item, format, offers, campaigns, revisio
         <label className="form-field">{format === "instagram" ? "Interner Titel" : "Überschrift"}<input value={title} maxLength={120} onChange={(e) => { setTitle(e.target.value); setDirty(true); }} /></label>
         <label className="form-field">Angebot<select value={related} onChange={(e) => { setRelated(e.target.value); setDirty(true); }}><option value="">Ohne Zuordnung</option>{offers.map((o) => <option key={o.id} value={o.id}>{o.data.title}</option>)}</select></label>
         <label className="form-field">Kampagne<select aria-label="Kampagne" value={campaign} onChange={(e) => { setCampaign(e.target.value); setDirty(true); }}><option value="">Ohne Kampagne</option>{campaigns.map((r) => <option key={r.id} value={r.id}>{r.data.title} · {r.data.status}</option>)}</select></label>
-        {format === "instagram" ? <>
+        {format === "website" ? <>
+          {related && <button className="button" type="button" onClick={() => {
+            const offer = offers.find((o) => o.id === related)?.data;
+            if (!offer) return;
+            setTitle(offer.title); setBody(offer.description ?? "");
+            setCard((old) => ({ ...old, image: offer.image ?? "", price: offer.expected === undefined ? "" : "ab " + new Intl.NumberFormat("de-AT", { style: "currency", currency: "EUR" }).format(offer.expected) }));
+            setDirty(true);
+          }}>Angebotsdaten übernehmen</button>}
+          <PicturePicker value={card.image} media={media} name="Angebotsbild hochladen" busy={busy || Boolean(progress)} onSelect={(image) => patchCard({ image })} onUpload={(file) => run("Bild wird hochgeladen …", async () => { const image = await uploadPhoto(file); onMediaAdded(image); patchCard({ image: image.file }); })} onDeleted={clearDeletedMedia} />
+          {card.image && <button type="button" className="text-button" onClick={() => patchCard({ image: "" })}>Bild lösen</button>}
+          <label className="form-field">Beschreibung<textarea value={body} maxLength={2400} rows={5} onChange={(e) => { setBody(e.target.value); setDirty(true); }} /></label>
+          <label className="form-field">Preisangabe<input value={card.price} maxLength={80} placeholder="z. B. ab 590 € für zwei Personen" onChange={(e) => patchCard({ price: e.target.value })} /></label>
+          <label className="form-field">Button-Text<input value={card.cta} maxLength={45} onChange={(e) => patchCard({ cta: e.target.value })} /></label>
+          <label className="form-field">Zieladresse (HTTPS)<input type="url" value={card.url} maxLength={500} onChange={(e) => patchCard({ url: e.target.value })} /></label>
+        </> : format === "instagram" ? <>
           <div className="slide-strip" aria-label="Carousel-Slides">
             {slides.map((part, index) => <button key={part.id} title={part.title || "Slide " + (index + 1)} aria-label={"Slide " + (index + 1) + " auswählen"} aria-pressed={index === active} onClick={() => setActive(index)}>
               {part.image ? <img src={part.image} alt="" style={cropStyle(part.crop)} /> : <span><ImagePlus size={14} /></span>}<b>{index + 1}</b>
@@ -144,13 +162,16 @@ export default function ContentStudio({ item, format, offers, campaigns, revisio
         {(!generate || dirty) && <p className="form-help">Speichere den Beitrag zuerst.</p>}
       </div>
       <aside className="studio-preview">
-        <div className="preview-top"><span>Vorschau</span><span>{format === "instagram" ? active + 1 + " / " + slides.length : "E-Mail"}</span></div>
+        <div className="preview-top"><span>Vorschau</span><span>{format === "instagram" ? active + 1 + " / " + slides.length : format === "website" ? "Website" : "E-Mail"}</span></div>
         {format === "instagram" ? <><div className={"carousel-canvas " + (slide.layout === "photo" ? "canvas-photo" : "")}>
           <SlidePicture key={slide.id + slide.image} slide={slide} onCrop={(crop) => patchSlide(slide.id, { crop })} />
           {slide.layout === "editorial" && <SlideTextPreview title={slide.title} text={slide.text} palette={slide.palette} />}
         </div><div className="preview-nav"><button className="icon-button" aria-label="Vorheriger Slide" disabled={active === 0} onClick={() => setActive(active - 1)}><ChevronLeft size={19} /></button><span>Slide {active + 1} von {slides.length}</span><button className="icon-button" aria-label="Nächster Slide" disabled={active === slides.length - 1} onClick={() => setActive(active + 1)}><ChevronRight size={19} /></button></div>
           {slide.image && <CropControls crop={slide.crop ?? defaultSlideCrop} onChange={(crop) => patchSlide(slide.id, { crop })} />}
-          {body && <p className="studio-caption">{body}</p>}</> : <div className="mail-preview">
+          {body && <p className="studio-caption">{body}</p>}</> : format === "website" ? <article className="website-card-preview">
+          {card.image ? <img src={card.image} alt="" /> : <div className="website-card-placeholder"><ImagePlus size={28} /><span>Bild auswählen</span></div>}
+          <div className="website-card-copy"><small>SCHLOSSHOTEL KITZBÜHEL</small><h3>{title || "Dein Angebotstitel"}</h3><p>{body || "Hier erscheint die Beschreibung des Angebots."}</p>{card.price && <strong>{card.price}</strong>}{card.cta && <span className="website-card-button">{card.cta} →</span>}</div>
+        </article> : <div className="mail-preview">
           <div className="mail-inbox"><strong>{mail.subject || "Newsletter-Betreff"}</strong><small>{mail.preheader || "Vorschautext"}</small></div>
           <div className="mail-brand"><img src="/brand/logo.svg" alt="Schlosshotel Kitzbühel" /></div>
           {mail.image && <img className="mail-hero" src={mail.image} alt={title || "Newsletter-Titelbild"} />}
@@ -160,7 +181,7 @@ export default function ContentStudio({ item, format, offers, campaigns, revisio
           {format === "instagram" ? <>
             <button className="button" disabled={Boolean(progress) || !slide.image} onClick={() => run("Slide wird exportiert …", async () => download("slide-" + String(active + 1).padStart(2, "0") + ".png", await renderSlide(slide), "image/png"))}><Download size={15} /> Slide als PNG</button>
             <button className="button" disabled={Boolean(progress)} onClick={() => run("Carousel wird exportiert …", () => carouselZip(slides, body))}><Download size={15} /> Carousel als ZIP</button>
-          </> : <button className="button" disabled={Boolean(progress)} onClick={() => run("Newsletter wird exportiert …", () => newsletterZip(editorData(false)))}><Download size={15} /> Newsletter als HTML-Paket</button>}
+          </> : format === "website" ? <button className="button" disabled={Boolean(progress)} onClick={() => run("Angebotskachel wird exportiert …", () => websiteCardZip(editorData(false)))}><Download size={15} /> Website-Kachel als HTML-Paket</button> : <button className="button" disabled={Boolean(progress)} onClick={() => run("Newsletter wird exportiert …", () => newsletterZip(editorData(false)))}><Download size={15} /> Newsletter als HTML-Paket</button>}
         </div>
       </aside>
     </div>
