@@ -391,6 +391,9 @@ footer { display: flex; gap: 12px; flex-wrap: wrap; justify-content: space-betwe
 @media(max-width:560px) { .studio-body { grid-template-columns:1fr; } .studio-preview { border:0; border-top:1px solid var(--line); } }
 
 .settings-panel { padding:16px; }
+.settings-panel > .card-heading { padding:0 0 14px; align-items:center; }
+.settings-panel > .card-heading h3 { color:var(--wine); font-size:20px; line-height:1.2; }
+.settings-panel > .card-heading p { margin-top:5px; }
 .settings-list { list-style:none; padding:0; margin:8px 0 0; }
 .settings-row { display:flex; align-items:center; justify-content:space-between; gap:10px; border-top:1px solid var(--line); padding:9px 0; }
 .settings-row small { display:block; color:var(--muted); overflow-wrap:anywhere; }
