@@ -80,7 +80,7 @@ h1,h2,h3,p { margin: 0; }
 .budget-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); }
 .overview-grid { display: grid; grid-template-columns: minmax(0,1.75fr) minmax(0,1fr); gap: 15px; margin-bottom: 16px; }
 .card-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 16px 17px 10px; }
-.card-heading h3 { font-size: 16px; font-weight: 700; letter-spacing: -.025em; }
+.card-heading h3 { color:var(--wine); font-size:20px; line-height:1.2; font-weight:700; letter-spacing:-.025em; }
 .subtle { color: #906c78; }
 .chart { width: 100%; height: auto; padding: 0 11px; display: block; }
 .chart text { font: 10px sans-serif; fill: #7c6c70; }
@@ -355,7 +355,7 @@ footer { display: flex; gap: 12px; flex-wrap: wrap; justify-content: space-betwe
 .profile-row .record-row { flex:1; border:0; }
 .campaign-calendar { overflow:hidden; }
 .campaign-calendar summary { padding:13px 16px; cursor:pointer; color:var(--wine); font-weight:700; }
-.channel-settings summary { padding:13px 16px; cursor:pointer; color:var(--wine); font-weight:700; }
+.channel-settings summary { padding:13px 16px; cursor:pointer; color:var(--wine); font-size:20px; line-height:1.2; font-weight:700; letter-spacing:-.025em; }
 .channel-settings-body { padding:0 16px 12px; }
 .channel-form { display:flex; align-items:flex-end; gap:8px; flex-wrap:wrap; }
 .channel-form .form-field { flex:1 1 150px; }
@@ -392,7 +392,6 @@ footer { display: flex; gap: 12px; flex-wrap: wrap; justify-content: space-betwe
 
 .settings-panel { padding:16px; }
 .settings-panel > .card-heading { padding:0 0 14px; align-items:center; }
-.settings-panel > .card-heading h3 { color:var(--wine); font-size:20px; line-height:1.2; }
 .settings-panel > .card-heading p { margin-top:5px; }
 .settings-list { list-style:none; padding:0; margin:8px 0 0; }
 .settings-row { display:flex; align-items:center; justify-content:space-between; gap:10px; border-top:1px solid var(--line); padding:9px 0; }
