@@ -50,6 +50,10 @@ export type ContentRevision = { record: string; title: string; status: string; c
 export type MediaImage = { file: string; label: string };
 export type ChannelOption = { code: string; label: string; active: boolean };
 export type OwnerOption = { id: string; name: string; role: string; active: boolean };
+const departmentRoles = ["Direktion", "Digital Marketing", "Marketing", "Content & Redaktion", "Website & Technik", "Reservierung & Direktvertrieb", "Rezeption", "Revenue Management", "Controlling", "Agentur"];
+export function ownerRoleOptions(owners: OwnerOption[]) {
+  return [...new Set([...departmentRoles, ...owners.map((owner) => owner.role).filter(Boolean)])].sort((a, b) => a.localeCompare(b, "de-AT"));
+}
 export type WorkspaceIdentity = { role: "guest" } | { role: "admin" | "member"; owner: string; name: string; username: string };
 export type AccountSummary = { owner: string; username: string; admin: boolean };
 export type Workspace = { records: RecordItem[]; metrics: Metric[]; campaignMetrics: CampaignMetric[]; revisions: ContentRevision[]; connections: Connection[]; schedules: Schedule[]; media: MediaImage[]; channelOptions: ChannelOption[]; owners: OwnerOption[]; connectorTag: string; ai: boolean };

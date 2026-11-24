@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { Pool, type QueryResultRow } from "pg";
-import { agencyChannels, availabilityLabel, brandImages, campaignRowsFor, channelCode, channels, connectionCategories, defaultChannelOptions, isCustomConnection, latestOfferChecks, offerComparison, priceEuro, sum, euro, type CampaignMetric, type ChannelOption, type ContentRevision, type Connection, type Data, type Kind, type MediaImage, type Metric, type OwnerOption, type RecordItem, type Schedule, type SlideCrop, type Workspace } from "./model";
+import { agencyChannels, availabilityLabel, brandImages, campaignRowsFor, channelCode, channels, connectionCategories, defaultChannelOptions, isCustomConnection, latestOfferChecks, offerComparison, ownerRoleOptions, priceEuro, sum, euro, type CampaignMetric, type ChannelOption, type ContentRevision, type Connection, type Data, type Kind, type MediaImage, type Metric, type OwnerOption, type RecordItem, type Schedule, type SlideCrop, type Workspace } from "./model";
 import { connectors, examples, feed } from "./seed";
 import { checkWebsite } from "./website-check";
 import { createReportSnapshot, reportDescription, reportKinds, type ReportKind } from "./report";
@@ -514,6 +514,7 @@ async function performAction(query: Query, id: string, body: Record<string, unkn
     const name = text(body.name ?? owner?.name, "Name", 120).replace(/\s+/g, " ");
     const role = text(body.role ?? owner?.role ?? "", "Rolle", 100);
     if (!name) throw new InputError("Gib den Namen der Person ein.");
+    if (role && !ownerRoleOptions(state.owners).includes(role)) throw new InputError("Wähle eine Rolle aus der Liste.");
     if (state.owners.some((person) => person.id !== owner?.id && person.name.toLowerCase() === name.toLowerCase())) throw new InputError("Diese Person ist bereits eingetragen.");
     if (body.active !== undefined && typeof body.active !== "boolean") throw new InputError("Der Personenstatus ist ungültig.");
     if (owner) {

@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Plus, UserRound } from "lucide-react";
 import ChannelSettings from "./channel-settings";
 import { AccountForm } from "./team-access";
-import { connectionCategories, isCustomConnection, type Connection, type ConnectionMode, type OwnerOption, type WorkspaceResponse } from "../lib/model";
+import { Choice } from "./form-fields";
+import { connectionCategories, isCustomConnection, ownerRoleOptions, type Connection, type ConnectionMode, type OwnerOption, type WorkspaceResponse } from "../lib/model";
 
 type SettingsAction = (payload: Record<string, unknown>, message: string) => Promise<boolean>;
 const providers: Record<string, { title?: string; account: string; help: string }> = {
@@ -21,17 +22,18 @@ export default function WorkspaceSettings({ data, busy, save, refresh }: { data:
   const [addingService, setAddingService] = useState(false);
   const canManage = data.identity.role !== "member";
   const firstAccount = data.identity.role === "guest";
+  const roles = ownerRoleOptions(data.owners);
 
   return <>
     <section className="card panel settings-panel">
       <div className="card-heading"><div><h3>Personen, Zuständigkeiten & Zugänge</h3><p>Verwalte Aufgabenverantwortliche und ihre Benutzerkonten.</p></div><UserRound size={19} /></div>
       {!canManage && <p className="form-help">Benutzerkonten und Einstellungen werden vom Administrator verwaltet.</p>}
-      {canManage && <PersonForm busy={busy} submit={async (data) => save({ action: "owner-setting", ...data }, "Person gespeichert.")} />}
+      {canManage && <PersonForm roles={roles} busy={busy} submit={async (data) => save({ action: "owner-setting", ...data }, "Person gespeichert.")} />}
       <ul className="settings-list">
         {data.owners.map((person) => {
           const account = data.accounts.find((entry) => entry.owner === person.id);
           return <li key={person.id} className="settings-row">
-          {editing === person.id ? <PersonForm person={person} busy={busy} cancel={() => setEditing(undefined)} submit={async (change) => {
+          {editing === person.id ? <PersonForm person={person} roles={roles} busy={busy} cancel={() => setEditing(undefined)} submit={async (change) => {
             const saved = await save({ action: "owner-setting", id: person.id, ...change }, "Person gespeichert.");
             if (saved) setEditing(undefined);
             return saved;
@@ -79,8 +81,8 @@ export default function WorkspaceSettings({ data, busy, save, refresh }: { data:
   </>;
 }
 
-function PersonForm({ person, busy, submit, cancel }: {
-  person?: OwnerOption; busy: boolean; submit: (data: Record<string, FormDataEntryValue>) => Promise<boolean>; cancel?: () => void;
+function PersonForm({ person, roles, busy, submit, cancel }: {
+  person?: OwnerOption; roles: string[]; busy: boolean; submit: (data: Record<string, FormDataEntryValue>) => Promise<boolean>; cancel?: () => void;
 }) {
   return <form className="settings-form" onSubmit={async (event) => {
     event.preventDefault();
@@ -88,7 +90,7 @@ function PersonForm({ person, busy, submit, cancel }: {
     if (await submit(Object.fromEntries(new FormData(form))) && !person) form.reset();
   }}>
     <label className="form-field">Name<input name="name" maxLength={120} defaultValue={person?.name} required /></label>
-    <label className="form-field">Rolle<input name="role" maxLength={100} defaultValue={person?.role} /></label>
+    <Choice label="Rolle" name="role" value={person?.role} options={roles} />
     <div className="inline-actions"><button className="button primary" disabled={busy}>{person ? "Person speichern" : "Person hinzufügen"}</button>
       {cancel && <button type="button" className="button" onClick={cancel}>Abbrechen</button>}</div>
   </form>;
